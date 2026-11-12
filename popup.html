@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" class="is-popup" style="width: 760px; height: 580px; min-width: 760px; min-height: 580px; max-width: 760px; max-height: 580px;">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/icons/icon32.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MemoDock</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- KaTeX CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <style>
+      /* CRITICAL: Enforce explicit dimensions so Chrome extension popup never collapses to 25px */
+      html, body {
+        width: 760px !important;
+        height: 580px !important;
+        min-width: 760px !important;
+        min-height: 580px !important;
+        max-width: 760px !important;
+        max-height: 580px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+      }
+      #root, .popup-container {
+        width: 760px !important;
+        height: 580px !important;
+        min-width: 760px !important;
+        min-height: 580px !important;
+        max-width: 760px !important;
+        max-height: 580px !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-sizing: border-box !important;
+      }
+    </style>
+  </head>
+  <body class="is-popup bg-white dark:bg-obsidian-950 text-stone-900 dark:text-stone-100 antialiased selection:bg-amber-100 dark:selection:bg-amber-900/40" style="width: 760px; height: 580px; min-width: 760px; min-height: 580px; max-width: 760px; max-height: 580px;">
+    <div id="root" class="popup-container" style="width: 760px; height: 580px; min-width: 760px; min-height: 580px; max-width: 760px; max-height: 580px;"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

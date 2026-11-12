@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/icons/icon32.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MemoDock — Capture. Organize. Connect.</title>
+    <meta name="description" content="MemoDock is your personal knowledge workspace, right inside your browser. Save ideas, organize resources, manage lightweight PDFs, and build your knowledge with 100% local-first privacy." />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              paper: {
+                50: '#FDFBF7',
+                100: '#F7F4ED',
+                200: '#EFECE2',
+                800: '#2A2826',
+                900: '#1A1816',
+                950: '#121110',
+              },
+              obsidian: {
+                800: '#222226',
+                900: '#161618',
+                950: '#0F0F11',
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      .code-font {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .bg-radial-hero {
+        background: radial-gradient(circle at 50% 0%, rgba(217, 119, 6, 0.09) 0%, transparent 65%);
+      }
+      .dark .bg-radial-hero {
+        background: radial-gradient(circle at 50% 0%, rgba(217, 119, 6, 0.14) 0%, transparent 65%);
+      }
+    </style>
+  </head>
+  <body class="bg-paper-50 dark:bg-obsidian-950 text-stone-800 dark:text-stone-200 antialiased selection:bg-amber-100 dark:selection:bg-amber-900/40 transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-50 backdrop-blur-md bg-paper-50/90 dark:bg-obsidian-950/90 border-b border-stone-200/70 dark:border-zinc-800/80">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        
+        <!-- Brand -->
+        <a href="#" class="flex items-center gap-2.5 group">
+          <div class="w-8 h-8 rounded-lg bg-stone-900 dark:bg-stone-100 flex items-center justify-center text-white dark:text-stone-900 font-bold text-sm shadow-sm transition group-hover:scale-105">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+            </svg>
+          </div>
+          <div>
+            <span class="font-bold text-base tracking-tight text-stone-900 dark:text-stone-100">MemoDock</span>
+            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block leading-none">V2.0</span>
+          </div>
+        </a>
+
+        <!-- Nav Links -->
+        <nav class="hidden md:flex items-center gap-6 text-xs font-medium text-stone-600 dark:text-zinc-400">
+          <a href="#features" class="hover:text-stone-900 dark:hover:text-stone-100 transition">Features</a>
+          <a href="#audiences" class="hover:text-stone-900 dark:hover:text-stone-100 transition">Publics Cibles</a>
+          <a href="#install" class="hover:text-stone-900 dark:hover:text-stone-100 transition">Installation</a>
+          <a href="#shortcuts" class="hover:text-stone-900 dark:hover:text-stone-100 transition">Shortcuts</a>
+          <a href="#faq" class="hover:text-stone-900 dark:hover:text-stone-100 transition">FAQ</a>
+        </nav>
+
+        <!-- Right actions -->
+        <div class="flex items-center gap-2.5">
+          <!-- Theme toggle -->
+          <button id="themeToggleBtn" type="button" class="p-2 text-stone-500 hover:text-stone-900 dark:text-zinc-400 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded-lg transition" title="Toggle Theme">
+            <svg id="sunIcon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+            <svg id="moonIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+          </button>
+
+          <!-- GitHub repo button -->
+          <a href="https://github.com/ismailrhouzali/MemoDock" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-stone-200 dark:border-zinc-800 hover:bg-stone-100 dark:hover:bg-zinc-900 rounded-lg text-stone-700 dark:text-zinc-300 transition">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
+            </svg>
+            <span>GitHub</span>
+          </a>
+
+          <!-- Download Primary CTA -->
+          <a href="memodock-extension.zip" download="memodock-extension.zip" class="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg shadow-sm transition active:scale-95">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <span>Download</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative pt-20 pb-16 overflow-hidden bg-radial-hero">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 text-center">
+        
+        <!-- Category Pills Requested -->
+        <div class="flex flex-wrap items-center justify-center gap-2 mb-6">
+          <span class="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+            Smart Notes
+          </span>
+          <span class="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+            Web Clipper
+          </span>
+          <span class="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+            Resource Library
+          </span>
+          <span class="px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-semibold">
+            PDF Manager
+          </span>
+          <span class="px-3 py-1 rounded-full bg-stone-200/70 dark:bg-zinc-800 border border-stone-300/60 dark:border-zinc-700 text-stone-700 dark:text-zinc-300 text-xs font-semibold">
+            Local-first
+          </span>
+        </div>
+
+        <!-- Main Headline & Tagline -->
+        <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100 mb-4 leading-tight max-w-4xl mx-auto">
+          MemoDock
+        </h1>
+        <p class="text-xl sm:text-2xl font-semibold text-amber-600 dark:text-amber-500 mb-6">
+          Capture. Organize. Connect.
+        </p>
+
+        <!-- Subtitle -->
+        <p class="text-base sm:text-lg text-stone-600 dark:text-zinc-400 max-w-2xl mx-auto mb-4 leading-relaxed font-normal">
+          Your personal knowledge workspace, right inside your browser.
+        </p>
+        <p class="text-sm sm:text-base text-stone-500 dark:text-zinc-500 max-w-xl mx-auto mb-10 leading-relaxed font-medium">
+          Save ideas. Organize resources. Build your knowledge.
+        </p>
+
+        <!-- CTA Buttons -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md mx-auto mb-12">
+          <a href="memodock-extension.zip" download="memodock-extension.zip" class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-xl font-semibold text-sm shadow-md transition active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            <span>Download MemoDock (v2.0)</span>
+          </a>
+
+          <a href="https://github.com/ismailrhouzali/MemoDock" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-white dark:bg-zinc-900 hover:bg-stone-50 dark:hover:bg-zinc-800 border border-stone-200 dark:border-zinc-800 text-stone-800 dark:text-stone-200 rounded-xl font-medium text-sm transition">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
+            </svg>
+            <span>GitHub Repository</span>
+          </a>
+        </div>
+
+        <!-- Social Proof Stats (zero emojis) -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-stone-500 dark:text-zinc-500 border-t border-stone-200/60 dark:border-zinc-800/60 pt-8 max-w-3xl mx-auto">
+          <div class="flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            <span>100% Local-First IndexedDB</span>
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <span>Instant Zero-Lag Writing</span>
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span>Lightweight Blob PDFs</span>
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+            <span>Drag & Drop Link Cards</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive App Showcase / Mockup -->
+    <section class="max-w-5xl mx-auto px-4 sm:px-6 mb-24">
+      <div class="rounded-2xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl overflow-hidden">
+        
+        <!-- Chrome Header -->
+        <div class="px-4 py-3 bg-stone-100/90 dark:bg-zinc-900/90 border-b border-stone-200/70 dark:border-zinc-800/80 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+            <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+            <span class="ml-2 text-xs font-mono text-stone-400">chrome-extension://memodock/index.html</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-stone-400">
+            <span class="px-2 py-0.5 rounded bg-stone-200/60 dark:bg-zinc-800 text-[11px] font-mono">Alt + N Quick Note</span>
+          </div>
+        </div>
+
+        <!-- UI Shell Simulation -->
+        <div class="grid grid-cols-1 md:grid-cols-12 min-h-[500px]">
+          
+          <!-- Sidebar Simulation (4 cols) -->
+          <div class="hidden md:block md:col-span-4 border-r border-stone-200/60 dark:border-zinc-800/60 bg-stone-50/60 dark:bg-zinc-950/50 p-4 space-y-4 text-xs">
+            <div class="flex items-center gap-2 px-2 py-1.5 font-bold text-stone-900 dark:text-stone-100">
+              <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+              <span>MemoDock Workspace</span>
+            </div>
+
+            <div class="space-y-1">
+              <div class="px-2.5 py-1.5 rounded-lg bg-stone-200/80 dark:bg-zinc-800 font-semibold text-stone-900 dark:text-stone-100 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-stone-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  <span>All Notes</span>
+                </span>
+                <span class="text-[10px] text-stone-400">14</span>
+              </div>
+              <div class="px-2.5 py-1.5 rounded-lg text-stone-600 dark:text-zinc-400 flex items-center justify-between hover:bg-stone-100 dark:hover:bg-zinc-900">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+                  <span>Favorites</span>
+                </span>
+                <span class="text-[10px] text-stone-400">4</span>
+              </div>
+              <div class="px-2.5 py-1.5 rounded-lg text-stone-600 dark:text-zinc-400 flex items-center justify-between hover:bg-stone-100 dark:hover:bg-zinc-900">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+                  <span>Resource Library</span>
+                </span>
+                <span class="text-[10px] text-stone-400">8</span>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-stone-200/60 dark:border-zinc-800/60">
+              <div class="text-[11px] font-bold text-stone-400 uppercase tracking-wider mb-2">Folders</div>
+              <div class="space-y-1 text-stone-700 dark:text-zinc-300">
+                <div class="flex items-center gap-2 px-2 py-1 rounded bg-stone-200/50 dark:bg-zinc-800/50">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <span>Research & Science</span>
+                </div>
+                <div class="flex items-center gap-2 px-2 py-1 rounded">
+                  <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                  <span>Engineering & Code</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Editor Canvas Simulation (8 cols) -->
+          <div class="md:col-span-8 p-6 md:p-8 bg-paper-50 dark:bg-obsidian-950 flex flex-col justify-between">
+            <div class="space-y-4">
+              <!-- Note Title -->
+              <h2 class="text-2xl font-bold text-stone-900 dark:text-stone-100 flex items-center justify-between">
+                <span>Distributed Machine Learning Notes</span>
+                <span class="text-[11px] font-mono font-normal px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  Minimalist Mode
+                </span>
+              </h2>
+
+              <!-- Link Card Simulation -->
+              <div class="border border-stone-200/90 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900 p-3 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                  </div>
+                  <div class="min-w-0">
+                    <h4 class="font-semibold text-xs text-stone-900 dark:text-stone-100 truncate">
+                      arxiv.org/abs/2304.12244 • Large Language Models Survey
+                    </h4>
+                    <div class="flex items-center gap-2 text-[10px] text-stone-400 dark:text-zinc-500">
+                      <span>arxiv.org</span>
+                      <span>•</span>
+                      <span class="text-blue-600 dark:text-blue-400 font-semibold uppercase">Web Link Card</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-stone-500">
+                  <span class="px-2 py-1 rounded bg-stone-100 dark:bg-zinc-800 text-[11px]">Preview</span>
+                </div>
+              </div>
+
+              <!-- PDF Card Simulation -->
+              <div class="border border-stone-200/90 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900 p-3 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-9 h-9 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                  </div>
+                  <div class="min-w-0">
+                    <h4 class="font-semibold text-xs text-stone-900 dark:text-stone-100 truncate">
+                      transformer_architecture_cheatsheet.pdf
+                    </h4>
+                    <div class="flex items-center gap-2 text-[10px] text-stone-400 dark:text-zinc-500">
+                      <span>1.8 MB</span>
+                      <span>•</span>
+                      <span class="text-red-600 dark:text-red-400 font-semibold uppercase">Lightweight Blob Storage</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-stone-500">
+                  <span class="px-2 py-1 rounded bg-stone-100 dark:bg-zinc-800 text-[11px]">Preview</span>
+                </div>
+              </div>
+
+              <!-- LaTeX Equation Preview Box -->
+              <div class="p-3 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl text-center font-serif text-sm">
+                <span class="text-amber-700 dark:text-amber-400 text-[11px] font-mono block mb-1">KaTeX Real-Time Mathematics</span>
+                <span class="text-stone-900 dark:text-stone-100 text-base">$$\mathcal{L}_{total} = \mathbb{E}_{(x, y)} [-\log P(y \mid x; \theta)] + \lambda \|\theta\|_2^2$$</span>
+              </div>
+            </div>
+
+            <!-- Footer status -->
+            <div class="pt-6 border-t border-stone-200/50 dark:border-zinc-800/50 flex items-center justify-between text-[11px] text-stone-400">
+              <span>528 words • 3 min read</span>
+              <span class="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
+                <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                IndexedDB Saved
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Target Audiences Section Requested -->
+    <section id="audiences" class="py-20 bg-stone-100/60 dark:bg-zinc-900/40 border-y border-stone-200/80 dark:border-zinc-800/80">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        
+        <div class="text-center max-w-2xl mx-auto mb-14">
+          <span class="text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider mb-2 block">
+            Publics Cibles & Cas d'Usage
+          </span>
+          <h2 class="text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-3">
+            Conçu pour vos exigences quotidiennes de travail
+          </h2>
+          <p class="text-sm text-stone-600 dark:text-zinc-400 leading-relaxed">
+            MemoDock répond précisément aux besoins des profils qui manipulent, structurent et organisent quotidiennement du savoir.
+          </p>
+        </div>
+
+        <!-- 2 Priority Segments Highlighted: Students & Developers -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          
+          <!-- Segment 1: Étudiants (Priority) -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border-2 border-amber-500/40 shadow-sm relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">
+              Segment Prioritaire
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-stone-900 dark:text-stone-100 mb-2">
+              Étudiants
+            </h3>
+            <p class="text-xs text-amber-700 dark:text-amber-400 font-semibold mb-3">
+              Cours, PDF légers, recherches, révisions & formules
+            </p>
+            <ul class="text-xs text-stone-600 dark:text-zinc-400 space-y-2 leading-relaxed">
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Stockage direct des polycopiés et PDF de cours sans alourdir le navigateur.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Rendu immédiat des équations de maths, physique et chimie via KaTeX.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Mode Minimaliste sans distraction pour réviser et rédiger dans le calme.</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Segment 2: Développeurs (Priority) -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border-2 border-blue-500/40 shadow-sm relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">
+              Segment Prioritaire
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-stone-900 dark:text-stone-100 mb-2">
+              Développeurs
+            </h3>
+            <p class="text-xs text-blue-700 dark:text-blue-400 font-semibold mb-3">
+              Documentation, snippets de code, GitHub, notes techniques
+            </p>
+            <ul class="text-xs text-stone-600 dark:text-zinc-400 space-y-2 leading-relaxed">
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Coloration syntaxique complète pour plus de 40 langages de programmation.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Import automatique et propre du Markdown depuis ChatGPT, Claude, GitHub et StackOverflow.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <svg class="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Diagrammes d'architecture, state machines et flowcharts avec Mermaid.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 3 Other Core Segments -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Segment 3: Chercheurs -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 shadow-sm">
+            <div class="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center mb-3">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            </div>
+            <h4 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-1">Chercheurs</h4>
+            <p class="text-[11px] text-stone-500 mb-2 font-medium">Articles, publications, références</p>
+            <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+              Capture instantanée des articles arXiv, indexation de liens sous forme de fiches interactives et citations structurées.
+            </p>
+          </div>
+
+          <!-- Segment 4: Créateurs de contenu -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 shadow-sm">
+            <div class="w-9 h-9 rounded-lg bg-pink-500/10 text-pink-600 flex items-center justify-center mb-3">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+            </div>
+            <h4 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-1">Créateurs de contenu</h4>
+            <p class="text-[11px] text-stone-500 mb-2 font-medium">Idées, inspirations, ressources</p>
+            <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+              Glissez-déposez n'importe quelle URL web directement dans votre bibliothèque pour conserver inspirations et briefs.
+            </p>
+          </div>
+
+          <!-- Segment 5: Knowledge Workers -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 shadow-sm">
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <h4 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-1">Knowledge Workers</h4>
+            <p class="text-[11px] text-stone-500 mb-2 font-medium">Centralisation et organisation</p>
+            <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+              Finie la dispersion entre 40 onglets ouverts. Centralisez notes, liens, documents et exportez en un clic.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Key Features Grid (Detailed & Complete, Zero Emojis) -->
+    <section id="features" class="py-24 max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <h2 class="text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-3">
+          Une suite complète d'outils, sans surcharge
+        </h2>
+        <p class="text-sm text-stone-600 dark:text-zinc-400">
+          Chaque composant a été pensé pour allier vitesse, esthétique minimale et productivité.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Feature 1: Minimalist vs Complete Presets -->
+        <div class="p-6 rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+          </div>
+          <h3 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-2">Mode Minimaliste ou Complet</h3>
+          <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Passez en un clic du mode <strong>Minimaliste sans distraction</strong> (papier blanc pur, sans barres d'outils) au mode <strong>Espace Complet</strong> avec sommaire dynamique et formatage avancé.
+          </p>
+        </div>
+
+        <!-- Feature 2: Lightweight PDF Manager -->
+        <div class="p-6 rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div class="w-9 h-9 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center mb-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+          </div>
+          <h3 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-2">Stockage PDF Léger en Blob</h3>
+          <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Vos PDF ne saturent plus la mémoire vive du navigateur. Ils sont conservés sous forme de Blobs binaires natifs avec génération d'URL éphémères et prévisualisation instantanée.
+          </p>
+        </div>
+
+        <!-- Feature 3: Link Cards & Drag & Drop -->
+        <div class="p-6 rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+          </div>
+          <h3 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-2">Cartes de Liens & Glisser-Déposer</h3>
+          <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Glissez-déposez n'importe quelle URL dans vos notes. Elle est immédiatement affichée sous forme de fiche élégante (icône de domaine, titre, aperçu web, copie rapide).
+          </p>
+        </div>
+
+        <!-- Feature 4: Universal Content Ingestion Engine -->
+        <div class="p-6 rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+          </div>
+          <h3 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-2">Moteur d'Import Intelligent</h3>
+          <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Copiez depuis ChatGPT, Claude, Notion, VS Code ou un site de documentation. MemoDock nettoie le HTML pollué et convertit fidèlement tableaux, listes et blocs de code.
+          </p>
+        </div>
+
+        <!-- Feature 5: Multi-Device Sync & Google Drive -->
+        <div class="p-6 rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div class="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center mb-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+          </div>
+          <h3 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-2">Synchronisation Google Drive & Dossier</h3>
+          <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Synchronisation cloud sécurisée sur votre propre Google Drive, ou synchronisation automatique dans un dossier local sous forme de fichiers Markdown (.md) lisibles.
+          </p>
+        </div>
+
+        <!-- Feature 6: Web Clipper & Tri-Mode Integration -->
+        <div class="p-6 rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          </div>
+          <h3 class="font-bold text-sm text-stone-900 dark:text-stone-100 mb-2">Popup, Panneau Latéral & Web Clipper</h3>
+          <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Accédez à vos notes depuis la popup rapide (<kbd class="px-1 py-0.5 rounded bg-stone-100 dark:bg-zinc-900 text-[10px]">Alt+N</kbd>), ouvrez le Panneau Latéral (Side Panel) ou travaillez en plein écran dans un onglet dédié.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- How to Install in Chrome (Clear 3-Step Guide) -->
+    <section id="install" class="py-20 bg-stone-100/60 dark:bg-zinc-900/40 border-y border-stone-200/80 dark:border-zinc-800/80">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        
+        <div class="text-center max-w-2xl mx-auto mb-16">
+          <span class="text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider mb-2 block">
+            Installation Simple & Rapide
+          </span>
+          <h2 class="text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-3">
+            Comment installer MemoDock dans Google Chrome
+          </h2>
+          <p class="text-sm text-stone-600 dark:text-zinc-400">
+            Installation en moins d'une minute, sans compte obligatoire et sans dépendance d'un store tiers.
+          </p>
+        </div>
+
+        <!-- 3 Step Visual Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Step 1 -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 font-bold text-base flex items-center justify-center mb-4">
+                1
+              </div>
+              <h3 class="text-base font-bold text-stone-900 dark:text-stone-100 mb-2">
+                Télécharger & Décompresser
+              </h3>
+              <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed mb-4">
+                Téléchargez l'archive officielle de l'extension et extrayez le dossier compressé sur votre ordinateur.
+              </p>
+            </div>
+            <a href="memodock-extension.zip" download="memodock-extension.zip" class="w-full text-center py-2.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg text-xs font-semibold transition">
+              Télécharger .ZIP (v2.0)
+            </a>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 font-bold text-base flex items-center justify-center mb-4">
+                2
+              </div>
+              <h3 class="text-base font-bold text-stone-900 dark:text-stone-100 mb-2">
+                Activer le Mode Développeur
+              </h3>
+              <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed mb-4">
+                Dans Google Chrome, saisissez <code class="px-1.5 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 text-amber-600 font-mono text-[11px]">chrome://extensions</code> dans la barre d'adresse et activez le <strong>Mode développeur</strong> en haut à droite.
+              </p>
+            </div>
+            <button onclick="copyToClipboard('chrome://extensions')" class="w-full text-center py-2.5 border border-stone-200 dark:border-zinc-800 hover:bg-stone-100 dark:hover:bg-zinc-900 rounded-lg text-xs font-medium text-stone-700 dark:text-zinc-300 transition flex items-center justify-center gap-1.5">
+              <span>Copier le lien chrome://extensions</span>
+              <span id="copiedTooltip" class="text-[10px] text-green-600 hidden font-bold">Copié</span>
+            </button>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="p-6 rounded-2xl bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 font-bold text-base flex items-center justify-center mb-4">
+                3
+              </div>
+              <h3 class="text-base font-bold text-stone-900 dark:text-stone-100 mb-2">
+                Charger l'extension non empaquetée
+              </h3>
+              <p class="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed mb-4">
+                Cliquez sur le bouton <strong>Charger l'extension non empaquetée</strong> en haut à gauche et sélectionnez le dossier décompressé. MemoDock est prêt !
+              </p>
+            </div>
+            <div class="p-2.5 rounded-lg bg-stone-50 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800 text-[11px] text-stone-500 text-center font-mono">
+              Raccourci: <kbd class="px-1 py-0.5 bg-white dark:bg-zinc-950 border rounded font-bold">Alt + N</kbd>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pro Tip Card -->
+        <div class="mt-8 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3 text-xs text-amber-900 dark:text-amber-300">
+          <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <div>
+            <strong>Conseil Productivité :</strong> Épinglez MemoDock à votre barre Chrome en cliquant sur l'icône des extensions, puis sur l'épingle. Utilisez <code class="font-mono bg-white/60 dark:bg-black/30 px-1 py-0.5 rounded">Ctrl + Shift + K</code> à tout moment pour lancer votre espace de notes dans un onglet dédié plein écran.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Keyboard Shortcuts Reference -->
+    <section id="shortcuts" class="py-16 max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="text-center max-w-xl mx-auto mb-12">
+        <h2 class="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-2">
+          Raccourcis Clavier & Vitesse d'Exécution
+        </h2>
+        <p class="text-xs text-stone-500">Gardez vos mains sur le clavier sans lever la main vers la souris.</p>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto text-xs">
+        <div class="p-3 bg-white dark:bg-zinc-950 rounded-xl border border-stone-200 dark:border-zinc-800 flex items-center justify-between">
+          <span class="text-stone-600 dark:text-zinc-400">Recherche Omni</span>
+          <kbd class="px-1.5 py-0.5 font-mono bg-stone-100 dark:bg-zinc-900 border rounded text-[11px]">Ctrl+K</kbd>
+        </div>
+        <div class="p-3 bg-white dark:bg-zinc-950 rounded-xl border border-stone-200 dark:border-zinc-800 flex items-center justify-between">
+          <span class="text-stone-600 dark:text-zinc-400">Nouvelle Note</span>
+          <kbd class="px-1.5 py-0.5 font-mono bg-stone-100 dark:bg-zinc-900 border rounded text-[11px]">Ctrl+N</kbd>
+        </div>
+        <div class="p-3 bg-white dark:bg-zinc-950 rounded-xl border border-stone-200 dark:border-zinc-800 flex items-center justify-between">
+          <span class="text-stone-600 dark:text-zinc-400">Mode Focus</span>
+          <kbd class="px-1.5 py-0.5 font-mono bg-stone-100 dark:bg-zinc-900 border rounded text-[11px]">F11</kbd>
+        </div>
+        <div class="p-3 bg-white dark:bg-zinc-950 rounded-xl border border-stone-200 dark:border-zinc-800 flex items-center justify-between">
+          <span class="text-stone-600 dark:text-zinc-400">Popup Rapide</span>
+          <kbd class="px-1.5 py-0.5 font-mono bg-stone-100 dark:bg-zinc-900 border rounded text-[11px]">Alt+N</kbd>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="py-20 max-w-3xl mx-auto px-4 sm:px-6">
+      <div class="text-center mb-14">
+        <h2 class="text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-3">
+          Questions Fréquentes
+        </h2>
+        <p class="text-sm text-stone-600 dark:text-zinc-400">
+          Tout ce que vous devez savoir sur le fonctionnement et la confidentialité de MemoDock.
+        </p>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <details class="p-4 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 group">
+          <summary class="font-semibold text-stone-900 dark:text-stone-100 cursor-pointer list-none flex items-center justify-between">
+            <span>Où sont stockées mes notes et mes ressources ?</span>
+            <svg class="w-4 h-4 text-stone-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </summary>
+          <p class="mt-3 text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Vos notes, ressources, liens et PDF sont stockés à 100% en local dans votre navigateur via IndexedDB (Dexie.js). Aucun contenu n'est envoyé à un serveur tiers sans votre accord explicite.
+          </p>
+        </details>
+
+        <details class="p-4 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 group">
+          <summary class="font-semibold text-stone-900 dark:text-stone-100 cursor-pointer list-none flex items-center justify-between">
+            <span>Comment fonctionne le stockage léger des PDF ?</span>
+            <svg class="w-4 h-4 text-stone-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </summary>
+          <p class="mt-3 text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Contrairement aux solutions qui convertissent les fichiers en lourdes chaînes de caractères base64 dans le document texte, MemoDock conserve le binaire natif sous forme de Blob et génère des URL éphémères uniquement lors de la lecture, préservant ainsi la fluidité totale de l'éditeur.
+          </p>
+        </details>
+
+        <details class="p-4 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 group">
+          <summary class="font-semibold text-stone-900 dark:text-stone-100 cursor-pointer list-none flex items-center justify-between">
+            <span>Puis-je exporter mes données en formats standards ?</span>
+            <svg class="w-4 h-4 text-stone-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </summary>
+          <p class="mt-3 text-stone-600 dark:text-zinc-400 leading-relaxed">
+            Oui. Vous pouvez exporter vos notes individuelles en Markdown pur (.md), PDF, HTML ou TXT. Vous pouvez également télécharger une sauvegarde JSON complète de toutes vos notes, dossiers, étiquettes et ressources, ou activer la synchronisation locale vers un dossier de votre disque.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-stone-200/80 dark:border-zinc-800/80 py-12 bg-white/40 dark:bg-zinc-950/40 text-xs text-stone-500 dark:text-zinc-500">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded bg-stone-900 dark:bg-stone-100 flex items-center justify-center text-white dark:text-stone-900 font-bold text-xs">
+            M
+          </div>
+          <span class="font-bold text-stone-800 dark:text-stone-200">MemoDock</span>
+          <span>— Capture. Organize. Connect.</span>
+        </div>
+
+        <div class="flex items-center gap-6">
+          <a href="https://github.com/ismailrhouzali/MemoDock" target="_blank" rel="noopener noreferrer" class="hover:text-stone-800 dark:hover:text-stone-200 transition font-medium">
+            GitHub Repository
+          </a>
+          <a href="memodock-extension.zip" download="memodock-extension.zip" class="hover:text-stone-800 dark:hover:text-stone-200 transition font-medium">
+            Download ZIP
+          </a>
+          <a href="/index.html" class="hover:text-stone-800 dark:hover:text-stone-200 transition font-medium">
+            Live Web App
+          </a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Theme & Clipboard Logic -->
+    <script>
+      const themeBtn = document.getElementById('themeToggleBtn');
+      const sunIcon = document.getElementById('sunIcon');
+      const moonIcon = document.getElementById('moonIcon');
+
+      function updateThemeIcons(isDark) {
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          sunIcon.classList.remove('hidden');
+          moonIcon.classList.add('hidden');
+        } else {
+          document.documentElement.classList.remove('dark');
+          sunIcon.classList.add('hidden');
+          moonIcon.classList.remove('hidden');
+        }
+      }
+
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      updateThemeIcons(prefersDark);
+
+      themeBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        updateThemeIcons(!isDark);
+      });
+
+      function copyToClipboard(text) {
+        navigator.clipboard.writeText(text);
+        const tooltip = document.getElementById('copiedTooltip');
+        tooltip.classList.remove('hidden');
+        setTimeout(() => tooltip.classList.add('hidden'), 2000);
+      }
+    </script>
+  </body>
+</html>
