@@ -8,11 +8,13 @@ import {
   Tag as TagIcon,
   FileText,
   Laptop,
+  Check,
+  RefreshCw,
 } from 'lucide-react';
 import {
   resourceService,
   getCurrentActiveTab,
-  fetchUrlMetadata,
+  autoExtractUrlMetadata,
   extractDomain,
 } from '../../services/resourceService';
 import { ResourceCollection } from '../../db/types';
@@ -39,7 +41,9 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
   const [notes, setNotes] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasAutoExtracted, setHasAutoExtracted] = useState(false);
 
+  // Auto-detect current active tab when opening modal
   useEffect(() => {
     if (isOpen) {
       setUrl('');
@@ -47,11 +51,52 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
       setDescription('');
       setTags([]);
       setNotes('');
+      setHasAutoExtracted(false);
       if (collections.length > 0) {
         setCollection(collections[0].name);
       }
+
+      // Check current tab
+      getCurrentActiveTab().then((activeTab) => {
+        if (activeTab && activeTab.url) {
+          setUrl(activeTab.url);
+          setTitle(activeTab.title);
+          autoExtractUrlMetadata(activeTab.url).then((meta) => {
+            if (meta.title && !activeTab.title) setTitle(meta.title);
+            if (meta.description) setDescription(meta.description);
+            if (meta.collection) setCollection(meta.collection);
+            if (meta.tags && meta.tags.length > 0) setTags(meta.tags);
+            setHasAutoExtracted(true);
+          });
+        }
+      });
     }
   }, [isOpen, collections]);
+
+  // Automatic Real-Time Metadata Ingestion as soon as URL is typed or pasted
+  useEffect(() => {
+    const clean = url.trim();
+    if (!clean || clean.length < 5) return;
+    if (!clean.includes('.') && !clean.startsWith('http')) return;
+
+    const timer = setTimeout(async () => {
+      setIsFetching(true);
+      try {
+        const meta = await autoExtractUrlMetadata(clean);
+        if (meta.title) setTitle(meta.title);
+        if (meta.description) setDescription(meta.description);
+        if (meta.collection) setCollection(meta.collection);
+        if (meta.tags && meta.tags.length > 0) {
+          setTags(meta.tags);
+        }
+        setHasAutoExtracted(true);
+      } finally {
+        setIsFetching(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [url]);
 
   if (!isOpen) return null;
 
@@ -61,11 +106,11 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
     if (activeTab) {
       setUrl(activeTab.url);
       setTitle(activeTab.title);
-      // Auto-extract domain
-      const domain = extractDomain(activeTab.url);
-      if (!description) {
-        setDescription(`Bookmarked from ${domain}`);
-      }
+      const meta = await autoExtractUrlMetadata(activeTab.url);
+      if (meta.description) setDescription(meta.description);
+      if (meta.collection) setCollection(meta.collection);
+      if (meta.tags && meta.tags.length > 0) setTags(meta.tags);
+      setHasAutoExtracted(true);
     }
     setIsFetching(false);
   };
@@ -73,9 +118,12 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
   const handleFetchMetadata = async () => {
     if (!url.trim()) return;
     setIsFetching(true);
-    const meta = await fetchUrlMetadata(url);
-    if (meta.title && !title) setTitle(meta.title);
-    if (meta.description && !description) setDescription(meta.description);
+    const meta = await autoExtractUrlMetadata(url);
+    if (meta.title) setTitle(meta.title);
+    if (meta.description) setDescription(meta.description);
+    if (meta.collection) setCollection(meta.collection);
+    if (meta.tags && meta.tags.length > 0) setTags(meta.tags);
+    setHasAutoExtracted(true);
     setIsFetching(false);
   };
 
@@ -177,8 +225,27 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
                 disabled={isFetching || !url.trim()}
                 className="absolute right-2 px-2 py-1 text-[10px] bg-stone-200/70 dark:bg-zinc-800 hover:bg-stone-300 rounded font-medium text-stone-700 dark:text-zinc-300 transition"
               >
-                {isFetching ? 'Fetching...' : 'Fetch Info'}
+                {isFetching ? 'Extraction...' : 'Auto-extraire'}
               </button>
+            </div>
+
+            {/* Real-Time Auto-Extraction Status Badge */}
+            <div className="mt-1 flex items-center justify-between text-[11px]">
+              {isFetching ? (
+                <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium animate-pulse">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  <span>Extraction automatique en cours...</span>
+                </span>
+              ) : hasAutoExtracted && title ? (
+                <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                  <Check className="w-3 h-3" />
+                  <span>Titre, description et tags extraits automatiquement</span>
+                </span>
+              ) : (
+                <span className="text-stone-400 text-[10px]">
+                  Collez un lien pour extraire automatiquement les informations
+                </span>
+              )}
             </div>
           </div>
 

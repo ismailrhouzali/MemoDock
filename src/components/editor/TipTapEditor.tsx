@@ -21,6 +21,7 @@ import { MermaidBlock } from './extensions/MermaidBlock';
 import { PdfAttachmentNode } from './extensions/PdfAttachment';
 import { LinkCardNode } from './extensions/LinkCard';
 import { EditorToolbar } from './EditorToolbar';
+import { MinimalistEditorHeader } from './MinimalistEditorHeader';
 import { FindReplaceBar } from './FindReplaceBar';
 import { TableOfContents } from './TableOfContents';
 import { ContextMenu, ContextMenuPosition } from '../common/ContextMenu';
@@ -38,6 +39,7 @@ import {
   EditorFontSize,
   EditorLayoutSettings,
   NoteVersion,
+  ThemeMode,
 } from '../../db/types';
 import {
   Bold,
@@ -61,18 +63,59 @@ import {
 
 const lowlight = createLowlight(common);
 
+export function extractTitleFromContent(html: string, plainText: string): string {
+  // 1. Try first heading in html (h1, h2, h3)
+  const headingMatch = html.match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
+  if (headingMatch && headingMatch[1]) {
+    const text = headingMatch[1]
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+    if (text.length > 0) {
+      return text.length > 60 ? text.slice(0, 60) + '...' : text;
+    }
+  }
+
+  // 2. Try first non-empty line of plain text
+  if (plainText) {
+    const lines = plainText.split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = rawLine
+        .replace(/^[#\s\-*+>]+/, '')
+        .replace(/^\[[ xX]\]\s*/, '')
+        .replace(/^\d+[\.\)]\s*/, '')
+        .trim();
+      if (line.length > 1) {
+        return line.length > 60 ? line.slice(0, 60) + '...' : line;
+      }
+    }
+  }
+
+  return '';
+}
+
 interface TipTapEditorProps {
   note: Note;
   allNotes?: Note[];
   folders: Folder[];
   availableTags: Tag[];
   onUpdateNote: (updated: Partial<Note>) => void;
+  onDeleteNote?: (id: string) => void;
   onNavigateToNote?: (noteId: string) => void;
   editorWidth: EditorWidth;
   editorFont: EditorFont;
   editorFontSize: EditorFontSize;
   editorLayout: EditorLayoutSettings;
   focusMode: boolean;
+  onToggleFocusMode?: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+  theme?: ThemeMode;
+  onCycleTheme?: () => void;
+  onOpenSettings?: () => void;
   onStatsChange?: (stats: { words: number; chars: number; readingTime: number }) => void;
   onOpenTemplates?: () => void;
   onOpenHistory?: () => void;
@@ -84,12 +127,19 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   folders,
   availableTags,
   onUpdateNote,
+  onDeleteNote,
   onNavigateToNote,
   editorWidth,
   editorFont,
   editorFontSize,
   editorLayout,
   focusMode,
+  onToggleFocusMode,
+  isSidebarOpen = true,
+  onToggleSidebar,
+  theme = 'light',
+  onCycleTheme,
+  onOpenSettings,
   onStatsChange,
   onOpenTemplates,
   onOpenHistory,
@@ -287,11 +337,30 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       const internalLinks = extractInternalLinks(html, allNotes);
       syncBacklinks(note.id, internalLinks);
 
+      // Real-time automatic note title generation from content
+      let activeTitle = title;
+      const isAutoTitleEligible =
+        !note.title ||
+        note.title === 'Untitled Note' ||
+        note.title === 'Sans titre' ||
+        note.isAutoTitle === true ||
+        (note.isAutoTitle !== false && (!title || title === 'Untitled Note'));
+
+      if (isAutoTitleEligible && trimmed.length > 0) {
+        const auto = extractTitleFromContent(html, trimmed);
+        if (auto && auto !== title) {
+          activeTitle = auto;
+          setTitle(auto);
+        }
+      }
+
       onUpdateNote({
+        title: activeTitle,
         content: html,
         plainText: text,
         internalLinks,
         updatedAt: Date.now(),
+        ...(isAutoTitleEligible ? { isAutoTitle: true } : {}),
       });
     },
   });
@@ -343,9 +412,12 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   }, [note.id, note.content, note.title]);
 
   const handleTitleBlur = () => {
-    if (title !== note.title) {
+    const trimmed = title.trim();
+    if (trimmed !== note.title) {
+      const isEmpty = trimmed.length === 0;
       onUpdateNote({
-        title: title.trim() || 'Untitled Note',
+        title: trimmed || 'Untitled Note',
+        isAutoTitle: isEmpty,
         updatedAt: Date.now(),
       });
     }
@@ -436,18 +508,32 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   }[editorFontSize];
 
   // Minimal layout flags
+  const isMinimal = editorLayout.mode === 'minimal';
   const showToolbar = !focusMode && editorLayout.mode !== 'focus' && editorLayout.showToolbar;
-  const showMetadata = !focusMode && editorLayout.mode === 'standard';
-  const showBreadcrumbs = !focusMode && editorLayout.showBreadcrumbs;
+  const showMetadata = !focusMode && !isMinimal && editorLayout.mode === 'standard';
+  const showBreadcrumbs = !focusMode && !isMinimal && editorLayout.showBreadcrumbs;
 
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-white dark:bg-obsidian-950 text-stone-800 dark:text-stone-200">
       
       {/* Editor Center Container */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Top formatting toolbar */}
-        {showToolbar && (
-          <>
+        {/* Header: Minimalist floating header vs Sticky standard toolbar */}
+        {isMinimal && !focusMode ? (
+          <MinimalistEditorHeader
+            editor={editor}
+            note={note}
+            isSidebarOpen={isSidebarOpen ?? true}
+            onToggleSidebar={onToggleSidebar || (() => {})}
+            onDeleteNote={onDeleteNote ? () => onDeleteNote(note.id) : undefined}
+            theme={theme}
+            onCycleTheme={onCycleTheme}
+            onOpenSettings={onOpenSettings}
+            focusMode={focusMode}
+            onToggleFocusMode={onToggleFocusMode}
+          />
+        ) : showToolbar && (
+          <div className="sticky top-0 z-20 backdrop-blur-md bg-white/95 dark:bg-zinc-950/95 border-b border-stone-200/80 dark:border-zinc-800">
             <EditorToolbar
               editor={editor}
               onToggleFindReplace={() => setShowFindReplace(!showFindReplace)}
@@ -464,7 +550,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 onClose={() => setShowFindReplace(false)}
               />
             )}
-          </>
+          </div>
         )}
 
         {/* Editor Main Canvas Scroll Area */}

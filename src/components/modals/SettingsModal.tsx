@@ -478,6 +478,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => {
                       setLocalSettings((prev) => ({
                         ...prev,
+                        noteListMode: 'minimal',
                         editorLayout: {
                           ...prev.editorLayout,
                           mode: 'minimal',
@@ -490,16 +491,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                     className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
                       localSettings.editorLayout.mode === 'minimal'
-                        ? 'border-amber-600 bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm'
+                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 shadow-sm'
                         : 'border-stone-200 dark:border-zinc-800 hover:bg-white dark:hover:bg-zinc-800/60 text-stone-600 dark:text-zinc-400'
                     }`}
                   >
                     <div className="font-semibold text-xs flex items-center gap-1.5 mb-1">
-                      <Feather className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Minimalist (Distraction-Free)</span>
+                      <Feather className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Minimalist (TabNotebook Style)</span>
                     </div>
                     <p className="text-[10px] leading-tight opacity-80">
-                      Pure digital paper. Hides formatting bars, headers and distractions. Maximize writing focus.
+                      Pure digital paper. Minimalist sidebar, floating pill toolbar, auto-title generation, and distraction-free writing.
                     </p>
                   </button>
 
@@ -508,6 +509,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => {
                       setLocalSettings((prev) => ({
                         ...prev,
+                        noteListMode: 'detailed',
                         editorLayout: {
                           ...prev.editorLayout,
                           mode: 'standard',
@@ -520,16 +522,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                     className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
                       localSettings.editorLayout.mode === 'standard'
-                        ? 'border-amber-600 bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm'
+                        ? 'border-stone-800 dark:border-stone-200 bg-stone-100 dark:bg-zinc-800 text-stone-900 dark:text-stone-100 shadow-sm'
                         : 'border-stone-200 dark:border-zinc-800 hover:bg-white dark:hover:bg-zinc-800/60 text-stone-600 dark:text-zinc-400'
                     }`}
                   >
                     <div className="font-semibold text-xs flex items-center gap-1.5 mb-1">
-                      <Layout className="w-3.5 h-3.5 text-amber-600" />
+                      <Layout className="w-3.5 h-3.5 text-stone-800 dark:text-stone-200" />
                       <span>Complete Workspace</span>
                     </div>
                     <p className="text-[10px] leading-tight opacity-80">
-                      Full productivity suite with rich toolbar, outline TOC, metadata headers, and quick tools.
+                      Full power suite with fixed sticky formatting bar, pinned right outline TOC, folder/tag navigation, and metadata.
                     </p>
                   </button>
                 </div>

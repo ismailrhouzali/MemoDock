@@ -16,6 +16,7 @@ export interface Note {
   sourceTitle?: string;
   internalLinks?: string[]; // Note IDs or titles referenced via [[title]]
   backlinks?: string[]; // Note IDs that link to this note
+  isAutoTitle?: boolean; // Whether note title was automatically extracted from content
 }
 
 export interface Attachment {

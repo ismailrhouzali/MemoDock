@@ -41,6 +41,8 @@ interface TopToolbarProps {
   onToggleFocusMode: () => void;
   theme: ThemeMode;
   onCycleTheme: () => void;
+  editorMode?: 'minimal' | 'standard';
+  onToggleEditorMode?: (mode: 'minimal' | 'standard') => void;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -59,6 +61,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   onToggleFocusMode,
   theme,
   onCycleTheme,
+  editorMode = 'minimal',
+  onToggleEditorMode,
 }) => {
   const openInFullTab = () => {
     if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
@@ -137,6 +141,36 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             <span className="hidden sm:inline">PDFs</span>
           </button>
         </div>
+
+        {/* Minimalist vs Complete Workspace Mode Switcher */}
+        {workspaceView === 'notes' && onToggleEditorMode && (
+          <div className="hidden sm:flex items-center p-0.5 bg-stone-100 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800 rounded-lg text-[11px] mx-1">
+            <button
+              type="button"
+              onClick={() => onToggleEditorMode('minimal')}
+              className={`px-2 py-0.5 rounded-md transition font-medium ${
+                editorMode === 'minimal'
+                  ? 'bg-blue-600 text-white shadow-2xs font-semibold'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+              title="Minimalist Distraction-Free Note Mode (inspired by TabNotebook)"
+            >
+              Minimal
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleEditorMode('standard')}
+              className={`px-2 py-0.5 rounded-md transition font-medium ${
+                editorMode !== 'minimal'
+                  ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900 shadow-2xs font-semibold'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+              title="Complete Workspace Mode with Fixed Outline & Full Toolbar"
+            >
+              Complete
+            </button>
+          </div>
+        )}
 
         {/* New Note Button (only when notes view active) */}
         {workspaceView === 'notes' && (

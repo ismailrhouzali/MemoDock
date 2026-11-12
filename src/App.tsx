@@ -219,6 +219,20 @@ export const App: React.FC = () => {
     setSettings(updated);
   };
 
+  const handleToggleEditorMode = async (mode: 'minimal' | 'standard') => {
+    const updated = await settingsStorage.set({
+      editorLayout: {
+        ...settings.editorLayout,
+        mode,
+        showToolbar: mode === 'standard',
+        showBreadcrumbs: mode === 'standard',
+        showTableOfContents: mode === 'standard',
+      },
+      noteListMode: mode === 'minimal' ? 'minimal' : 'detailed',
+    });
+    setSettings(updated);
+  };
+
   const handleTogglePin = async (id: string, current: boolean) => {
     await updateNote(id, { isPinned: !current });
   };
@@ -252,6 +266,8 @@ export const App: React.FC = () => {
         onToggleFocusMode={() => setFocusMode(!focusMode)}
         theme={theme}
         onCycleTheme={cycleTheme}
+        editorMode={settings.editorLayout?.mode === 'minimal' ? 'minimal' : 'standard'}
+        onToggleEditorMode={handleToggleEditorMode}
       />
 
       {/* Main Workspace Body */}
@@ -302,6 +318,8 @@ export const App: React.FC = () => {
           }}
           noteListMode={settings.noteListMode}
           sidebarVisibility={settings.sidebarVisibility}
+          isMinimalistMode={settings.editorLayout?.mode === 'minimal' || settings.noteListMode === 'minimal'}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
 
         {/* Center Main Editor View */}
@@ -314,12 +332,19 @@ export const App: React.FC = () => {
               folders={folders}
               availableTags={tags}
               onUpdateNote={handleUpdateActiveNote}
+              onDeleteNote={deleteNote}
               onNavigateToNote={(id) => setActiveNoteId(id)}
               editorWidth={settings.editorWidth}
               editorFont={settings.fontFamily}
               editorFontSize={settings.fontSize}
               editorLayout={settings.editorLayout}
               focusMode={focusMode}
+              onToggleFocusMode={() => setFocusMode(!focusMode)}
+              isSidebarOpen={isSidebarOpen}
+              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+              theme={theme}
+              onCycleTheme={cycleTheme}
+              onOpenSettings={() => setIsSettingsOpen(true)}
               onStatsChange={setStats}
               onOpenTemplates={() => setIsTemplatesOpen(true)}
               onOpenHistory={() => setIsHistoryOpen(true)}
