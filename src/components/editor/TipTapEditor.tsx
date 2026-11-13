@@ -520,21 +520,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       
       {/* Editor Center Container */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header: Minimalist floating header vs Sticky standard toolbar */}
-        {isMinimal && !focusMode ? (
-          <MinimalistEditorHeader
-            editor={editor}
-            note={note}
-            isSidebarOpen={isSidebarOpen ?? true}
-            onToggleSidebar={onToggleSidebar || (() => {})}
-            onDeleteNote={onDeleteNote ? () => onDeleteNote(note.id) : undefined}
-            theme={theme}
-            onCycleTheme={onCycleTheme}
-            onOpenSettings={onOpenSettings}
-            focusMode={focusMode}
-            onToggleFocusMode={onToggleFocusMode}
-          />
-        ) : showToolbar && (
+        {/* Header: Well-organized EditorToolbar used across all modes including minimal mode */}
+        {!focusMode && (showToolbar || isMinimal) && (
           <div className="sticky top-0 z-20 backdrop-blur-md bg-white/95 dark:bg-zinc-950/95 border-b border-stone-200/80 dark:border-zinc-800">
             <EditorToolbar
               editor={editor}

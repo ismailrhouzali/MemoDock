@@ -60,7 +60,11 @@ export function useNotes(
       }
 
       let comparison = 0;
-      if (sortField === 'title') {
+      if (sortField === 'order') {
+        const orderA = a.order !== undefined ? a.order : a.updatedAt;
+        const orderB = b.order !== undefined ? b.order : b.updatedAt;
+        comparison = orderA - orderB;
+      } else if (sortField === 'title') {
         comparison = a.title.localeCompare(b.title);
       } else if (sortField === 'createdAt') {
         comparison = a.createdAt - b.createdAt;
@@ -232,6 +236,22 @@ export function useNotes(
     }
   };
 
+  const reorderNotes = async (draggedId: string, targetId: string) => {
+    const list = [...(notes || [])];
+    const draggedIdx = list.findIndex((n) => n.id === draggedId);
+    const targetIdx = list.findIndex((n) => n.id === targetId);
+    if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx) return;
+
+    const [dragged] = list.splice(draggedIdx, 1);
+    list.splice(targetIdx, 0, dragged);
+
+    await db.transaction('rw', db.notes, async () => {
+      for (let i = 0; i < list.length; i++) {
+        await db.notes.update(list[i].id, { order: i });
+      }
+    });
+  };
+
   return {
     notes: notes || [],
     folders: folders || [],
@@ -244,6 +264,7 @@ export function useNotes(
     permanentlyDeleteNote,
     emptyTrash,
     duplicateNote,
+    reorderNotes,
     createFolder,
     updateFolder,
     deleteFolder,

@@ -66,6 +66,7 @@ interface SidebarProps {
   onDeleteTag: (id: string, name: string) => Promise<void>;
   onEmptyTrash: () => Promise<void>;
   onMoveNoteToFolder?: (noteId: string, folderId: string | null) => Promise<void>;
+  onReorderNotes?: (draggedId: string, targetId: string) => Promise<void>;
   sortField: SortField;
   sortOrder: SortOrder;
   onChangeSort: (field: SortField, order: SortOrder) => void;
@@ -115,6 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteTag,
   onEmptyTrash,
   onMoveNoteToFolder,
+  onReorderNotes,
   sortField,
   sortOrder,
   onChangeSort,
@@ -155,6 +157,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Drag and drop state
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [dragOverNoteId, setDragOverNoteId] = useState<string | null>(null);
+  const [dragOverNavTarget, setDragOverNavTarget] = useState<'all' | 'favorites' | 'trash' | null>(null);
 
   // Resizing state
   const [currentWidth, setCurrentWidth] = useState<number>(sidebarWidth);
@@ -273,12 +277,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             notes.map((note) => {
               const isActive = note.id === activeNoteId;
+              const isDragOver = dragOverNoteId === note.id;
               return (
                 <div
                   key={note.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedNoteId(note.id);
+                    e.dataTransfer.setData('text/note-id', note.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragEnd={() => {
+                    setDraggedNoteId(null);
+                    setDragOverNoteId(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (draggedNoteId && draggedNoteId !== note.id) {
+                      setDragOverNoteId(note.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverNoteId === note.id) setDragOverNoteId(null);
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    const srcId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+                    setDragOverNoteId(null);
+                    setDraggedNoteId(null);
+                    if (srcId && srcId !== note.id && onReorderNotes) {
+                      await onReorderNotes(srcId, note.id);
+                      onChangeSort('order', 'asc');
+                    }
+                  }}
                   onClick={() => onSelectNote(note)}
                   className={`group relative flex items-center justify-between px-4 py-2 cursor-pointer transition text-xs select-none ${
-                    isActive
+                    isDragOver
+                      ? 'ring-2 ring-blue-500 bg-blue-50/70 dark:bg-blue-950/40 border-t-2 border-t-blue-500'
+                      : isActive
                       ? 'border-l-[3px] border-blue-600 bg-stone-200/80 dark:bg-zinc-800/90 text-stone-900 dark:text-stone-100 font-semibold'
                       : 'border-l-[3px] border-transparent text-stone-700 dark:text-zinc-300 hover:bg-stone-100/70 dark:hover:bg-zinc-900/60 font-normal'
                   }`}
@@ -348,7 +385,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectFilter({ type: 'all' })}
-                className={filterBtnClass(isFilterActive({ type: 'all' }))}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDragOverNavTarget('all');
+                }}
+                onDragLeave={() => setDragOverNavTarget(null)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setDragOverNavTarget(null);
+                  const noteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+                  if (noteId && onMoveNoteToFolder) {
+                    await onMoveNoteToFolder(noteId, null);
+                  }
+                }}
+                className={`${filterBtnClass(isFilterActive({ type: 'all' }))} ${
+                  dragOverNavTarget === 'all' ? 'ring-2 ring-blue-500 bg-blue-50/70 dark:bg-blue-950/40' : ''
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <FileText className="w-3.5 h-3.5 opacity-70" />
@@ -362,7 +415,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectFilter({ type: 'favorites' })}
-                className={filterBtnClass(isFilterActive({ type: 'favorites' }))}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDragOverNavTarget('favorites');
+                }}
+                onDragLeave={() => setDragOverNavTarget(null)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setDragOverNavTarget(null);
+                  const noteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+                  if (noteId) {
+                    onToggleFavorite(noteId, false);
+                  }
+                }}
+                className={`${filterBtnClass(isFilterActive({ type: 'favorites' }))} ${
+                  dragOverNavTarget === 'favorites' ? 'ring-2 ring-amber-500 bg-amber-50/70 dark:bg-amber-950/40' : ''
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
@@ -404,7 +473,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectFilter({ type: 'trash' })}
-                className={filterBtnClass(isFilterActive({ type: 'trash' }))}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDragOverNavTarget('trash');
+                }}
+                onDragLeave={() => setDragOverNavTarget(null)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setDragOverNavTarget(null);
+                  const noteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+                  if (noteId) {
+                    onDeleteNote(noteId);
+                  }
+                }}
+                className={`${filterBtnClass(isFilterActive({ type: 'trash' }))} ${
+                  dragOverNavTarget === 'trash' ? 'ring-2 ring-red-500 bg-red-50/70 dark:bg-red-950/40' : ''
+                }`}
               >
                 <span className="flex items-center gap-2">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
@@ -552,6 +637,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="bg-transparent text-[10px] text-stone-500 dark:text-zinc-400 focus:outline-none cursor-pointer"
                 title="Sort notes list"
               >
+                <option value="order-asc">Custom Drag & Drop</option>
                 <option value="updatedAt-desc">Modified (Newest)</option>
                 <option value="updatedAt-asc">Modified (Oldest)</option>
                 <option value="createdAt-desc">Created (Newest)</option>
@@ -565,6 +651,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex-1 overflow-y-auto divide-y divide-stone-200/40 dark:divide-zinc-800/40">
             {notes.map((note) => {
               const isActive = note.id === activeNoteId;
+              const isDragOver = dragOverNoteId === note.id;
               return (
                 <div
                   key={note.id}
@@ -572,11 +659,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onDragStart={(e) => {
                     setDraggedNoteId(note.id);
                     e.dataTransfer.setData('text/note-id', note.id);
+                    e.dataTransfer.effectAllowed = 'move';
                   }}
-                  onDragEnd={() => setDraggedNoteId(null)}
+                  onDragEnd={() => {
+                    setDraggedNoteId(null);
+                    setDragOverNoteId(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (draggedNoteId && draggedNoteId !== note.id) {
+                      setDragOverNoteId(note.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverNoteId === note.id) setDragOverNoteId(null);
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    const srcId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+                    setDragOverNoteId(null);
+                    setDraggedNoteId(null);
+                    if (srcId && srcId !== note.id && onReorderNotes) {
+                      await onReorderNotes(srcId, note.id);
+                      onChangeSort('order', 'asc');
+                    }
+                  }}
                   onClick={() => onSelectNote(note)}
                   className={`group relative p-2.5 cursor-pointer transition select-none ${
-                    isActive
+                    isDragOver
+                      ? 'ring-2 ring-blue-500 bg-blue-50/70 dark:bg-blue-950/40 border-t-2 border-t-blue-500'
+                      : isActive
                       ? 'bg-white dark:bg-zinc-900 border-l-[3px] border-blue-600 shadow-2xs font-semibold'
                       : 'hover:bg-stone-100/70 dark:hover:bg-zinc-900/60'
                   }`}

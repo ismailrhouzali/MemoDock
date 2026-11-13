@@ -9,6 +9,7 @@ import {
   SortOrder,
   AppSettings,
   ThemeMode,
+  ThemePreset,
   NoteTemplate,
   NoteVersion,
   WorkspaceView,
@@ -34,6 +35,7 @@ import { SearchModal } from './components/modals/SearchModal';
 import { TemplatesModal } from './components/modals/TemplatesModal';
 import { VersionHistoryModal } from './components/modals/VersionHistoryModal';
 import { ImportModal } from './components/modals/ImportModal';
+import { MarkdownLivePreview } from './components/editor/MarkdownLivePreview';
 import { FileText, Plus, Columns, X } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -44,7 +46,7 @@ export const App: React.FC = () => {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('notes');
   const [splitWorkspace, setSplitWorkspace] = useState(false);
-  const [splitRightView, setSplitRightView] = useState<WorkspaceView>('documents');
+  const [splitRightView, setSplitRightView] = useState<'markdown' | WorkspaceView>('markdown');
   const [autoHideNavbar, setAutoHideNavbar] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -78,6 +80,7 @@ export const App: React.FC = () => {
     permanentlyDeleteNote,
     emptyTrash,
     duplicateNote,
+    reorderNotes,
     createFolder,
     deleteFolder,
     createTag,
@@ -221,9 +224,22 @@ export const App: React.FC = () => {
     setTheme(next);
   };
 
+  const handleSetTheme = async (newTheme: ThemeMode, newPreset?: ThemePreset, newAccent?: string) => {
+    await setTheme(newTheme, newPreset, newAccent);
+    setSettings((prev) => ({
+      ...prev,
+      theme: newTheme,
+      ...(newPreset ? { themePreset: newPreset } : {}),
+      ...(newAccent ? { accentColor: newAccent } : {}),
+    }));
+  };
+
   const handleSaveSettings = async (newSettings: Partial<AppSettings>) => {
     const updated = await settingsStorage.set(newSettings);
     setSettings(updated);
+    if (newSettings.theme || newSettings.themePreset || newSettings.accentColor) {
+      await setTheme(newSettings.theme || theme, newSettings.themePreset, newSettings.accentColor);
+    }
   };
 
   const handleSelectLayoutPreset = async (preset: 'minimal' | 'balanced' | 'complete') => {
@@ -349,6 +365,7 @@ export const App: React.FC = () => {
           onDeleteTag={deleteTag}
           onEmptyTrash={emptyTrash}
           onMoveNoteToFolder={handleMoveNoteToFolder}
+          onReorderNotes={reorderNotes}
           sortField={sortField}
           sortOrder={sortOrder}
           onChangeSort={(f, o) => {
@@ -415,13 +432,27 @@ export const App: React.FC = () => {
 
           {/* Split Right Reference Pane */}
           {splitWorkspace && !focusMode && (
-            <div className="w-1/2 flex flex-col h-full overflow-hidden bg-stone-50 dark:bg-obsidian-900/60">
+            <div className="w-1/2 flex flex-col h-full overflow-hidden bg-stone-50 dark:bg-obsidian-900/60 border-l border-stone-200 dark:border-stone-800">
               {/* Header with selector */}
               <div className="h-10 border-b border-stone-200 dark:border-stone-800 px-3 flex items-center justify-between bg-white dark:bg-obsidian-900 select-none shrink-0">
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mr-2">
-                    Reference
+                    Volet
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSplitRightView('markdown');
+                      settingsStorage.set({ splitRightView: 'markdown' });
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                      splitRightView === 'markdown'
+                        ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                        : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    Aperçu Markdown
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -430,7 +461,7 @@ export const App: React.FC = () => {
                     }}
                     className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
                       splitRightView === 'documents'
-                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                        ? 'bg-blue-600 text-white font-semibold shadow-xs'
                         : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
                     }`}
                   >
@@ -444,11 +475,11 @@ export const App: React.FC = () => {
                     }}
                     className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
                       splitRightView === 'resources'
-                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                        ? 'bg-blue-600 text-white font-semibold shadow-xs'
                         : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
                     }`}
                   >
-                    Web Links
+                    Liens
                   </button>
                   <button
                     type="button"
@@ -458,16 +489,16 @@ export const App: React.FC = () => {
                     }}
                     className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
                       splitRightView === 'spreadsheets'
-                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                        ? 'bg-blue-600 text-white font-semibold shadow-xs'
                         : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
                     }`}
                   >
-                    Spreadsheets
+                    Tableurs
                   </button>
                 </div>
                 <button
                   type="button"
-                  title="Close Split View"
+                  title="Fermer le mode Double Volet"
                   onClick={() => {
                     setSplitWorkspace(false);
                     settingsStorage.set({ splitWorkspace: false });
@@ -480,7 +511,24 @@ export const App: React.FC = () => {
 
               {/* Body */}
               <div className="flex-1 overflow-hidden">
-                {splitRightView === 'resources' ? (
+                {splitRightView === 'markdown' ? (
+                  activeNote ? (
+                    <MarkdownLivePreview
+                      note={activeNote}
+                      onClose={() => {
+                        setSplitWorkspace(false);
+                        settingsStorage.set({ splitWorkspace: false });
+                      }}
+                      editorFont={settings.fontFamily}
+                      editorFontSize={settings.fontSize}
+                    />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 dark:text-zinc-600 select-none h-full">
+                      <FileText className="w-10 h-10 mb-2 opacity-40" />
+                      <p className="text-xs">Sélectionnez une note pour afficher l'aperçu Markdown.</p>
+                    </div>
+                  )
+                ) : splitRightView === 'resources' ? (
                   <ResourceGrid />
                 ) : splitRightView === 'spreadsheets' ? (
                   <SpreadsheetHub
@@ -529,7 +577,7 @@ export const App: React.FC = () => {
         settings={settings}
         onSaveSettings={handleSaveSettings}
         currentTheme={theme}
-        onSetTheme={setTheme}
+        onSetTheme={handleSetTheme}
         onEmptyTrash={emptyTrash}
       />
 

@@ -17,6 +17,7 @@ export interface Note {
   internalLinks?: string[]; // Note IDs or titles referenced via [[title]]
   backlinks?: string[]; // Note IDs that link to this note
   isAutoTitle?: boolean; // Whether note title was automatically extracted from content
+  order?: number; // Custom drag-and-drop sort order position
 }
 
 export interface Attachment {
@@ -265,7 +266,7 @@ export interface AppSettings {
   // Distraction-Free & Split Workspace
   autoHideNavbar?: boolean;
   splitWorkspace?: boolean;
-  splitRightView?: WorkspaceView;
+  splitRightView?: WorkspaceView | 'markdown';
 }
 
 export type ViewFilter = 
@@ -277,5 +278,5 @@ export type ViewFilter =
   | { type: 'folder'; folderId: string }
   | { type: 'tag'; tag: string };
 
-export type SortField = 'updatedAt' | 'createdAt' | 'title';
+export type SortField = 'updatedAt' | 'createdAt' | 'title' | 'order';
 export type SortOrder = 'asc' | 'desc';

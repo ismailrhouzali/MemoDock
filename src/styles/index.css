@@ -21,38 +21,180 @@
   }
 }
 
-/* Theme Presets */
-html.theme-preset-warm body {
+/* ==========================================================================
+   DYNAMIC THEME PRESETS & VISUAL ATMOSPHERES
+   ========================================================================== */
+
+/* 1. Warm Sepia (Paper Amber) */
+html.theme-preset-warm,
+html.theme-preset-warm body,
+html.theme-preset-warm #root > div,
+html.theme-preset-warm .bg-white,
+html.theme-preset-warm .tiptap-content-container,
+html.theme-preset-warm .tiptap {
   background-color: #faf8f5 !important;
   color: #292524 !important;
 }
-html.theme-preset-cool body {
+html.theme-preset-warm aside,
+html.theme-preset-warm .bg-stone-50,
+html.theme-preset-warm .bg-stone-50\/70 {
+  background-color: #f4efe6 !important;
+}
+html.theme-preset-warm header,
+html.theme-preset-warm nav,
+html.theme-preset-warm .backdrop-blur-md {
+  background-color: rgba(250, 248, 245, 0.95) !important;
+}
+html.theme-preset-warm .border-stone-200,
+html.theme-preset-warm .border-stone-100,
+html.theme-preset-warm .border-stone-200\/80 {
+  border-color: #e6dfd1 !important;
+}
+
+/* 2. Cool Frost (Crisp Slate Blue) */
+html.theme-preset-cool,
+html.theme-preset-cool body,
+html.theme-preset-cool #root > div,
+html.theme-preset-cool .bg-white,
+html.theme-preset-cool .tiptap-content-container,
+html.theme-preset-cool .tiptap {
   background-color: #f8fafc !important;
   color: #0f172a !important;
 }
-html.theme-preset-soft-gray body {
+html.theme-preset-cool aside,
+html.theme-preset-cool .bg-stone-50,
+html.theme-preset-cool .bg-stone-50\/70 {
+  background-color: #f1f5f9 !important;
+}
+html.theme-preset-cool header,
+html.theme-preset-cool nav,
+html.theme-preset-cool .backdrop-blur-md {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+}
+html.theme-preset-cool .border-stone-200,
+html.theme-preset-cool .border-stone-100,
+html.theme-preset-cool .border-stone-200\/80 {
+  border-color: #e2e8f0 !important;
+}
+
+/* 3. Soft Gray (Studio Neutral) */
+html.theme-preset-soft-gray,
+html.theme-preset-soft-gray body,
+html.theme-preset-soft-gray #root > div,
+html.theme-preset-soft-gray .bg-white,
+html.theme-preset-soft-gray .tiptap-content-container,
+html.theme-preset-soft-gray .tiptap {
   background-color: #f4f4f5 !important;
   color: #18181b !important;
 }
-html.dark.theme-preset-midnight-dark body {
+html.theme-preset-soft-gray aside,
+html.theme-preset-soft-gray .bg-stone-50,
+html.theme-preset-soft-gray .bg-stone-50\/70 {
+  background-color: #e4e4e7 !important;
+}
+html.theme-preset-soft-gray header,
+html.theme-preset-soft-gray nav,
+html.theme-preset-soft-gray .backdrop-blur-md {
+  background-color: rgba(244, 244, 245, 0.95) !important;
+}
+html.theme-preset-soft-gray .border-stone-200,
+html.theme-preset-soft-gray .border-stone-100,
+html.theme-preset-soft-gray .border-stone-200\/80 {
+  border-color: #d4d4d8 !important;
+}
+
+/* 4. Midnight Navy (Deep High-Contrast Dark) */
+html.theme-preset-midnight-dark,
+html.theme-preset-midnight-dark body,
+html.theme-preset-midnight-dark #root > div,
+html.theme-preset-midnight-dark .dark\:bg-obsidian-950,
+html.theme-preset-midnight-dark .dark\:bg-zinc-950,
+html.theme-preset-midnight-dark .dark\:bg-stone-900,
+html.theme-preset-midnight-dark .tiptap-content-container,
+html.theme-preset-midnight-dark .tiptap {
   background-color: #0f172a !important;
   color: #f8fafc !important;
 }
-html.dark.theme-preset-deep-dark body {
+html.theme-preset-midnight-dark aside,
+html.theme-preset-midnight-dark .dark\:bg-obsidian-900,
+html.theme-preset-midnight-dark .dark\:bg-zinc-900 {
+  background-color: #0b1120 !important;
+}
+html.theme-preset-midnight-dark header,
+html.theme-preset-midnight-dark nav,
+html.theme-preset-midnight-dark .backdrop-blur-md {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+}
+html.theme-preset-midnight-dark .dark\:border-stone-800,
+html.theme-preset-midnight-dark .dark\:border-zinc-800 {
+  border-color: #1e293b !important;
+}
+
+/* 5. Deep AMOLED (Pure Black OLED) */
+html.theme-preset-deep-dark,
+html.theme-preset-deep-dark body,
+html.theme-preset-deep-dark #root > div,
+html.theme-preset-deep-dark .dark\:bg-obsidian-950,
+html.theme-preset-deep-dark .dark\:bg-zinc-950,
+html.theme-preset-deep-dark .dark\:bg-stone-900,
+html.theme-preset-deep-dark .tiptap-content-container,
+html.theme-preset-deep-dark .tiptap {
   background-color: #000000 !important;
   color: #f4f4f5 !important;
 }
-
-/* Dynamic Primary Accent helpers */
-.bg-primary-accent {
-  background-color: var(--primary-accent) !important;
-  color: #ffffff !important;
+html.theme-preset-deep-dark aside,
+html.theme-preset-deep-dark .dark\:bg-obsidian-900,
+html.theme-preset-deep-dark .dark\:bg-zinc-900 {
+  background-color: #050505 !important;
 }
-.text-primary-accent {
+html.theme-preset-deep-dark header,
+html.theme-preset-deep-dark nav,
+html.theme-preset-deep-dark .backdrop-blur-md {
+  background-color: rgba(0, 0, 0, 0.95) !important;
+}
+html.theme-preset-deep-dark .dark\:border-stone-800,
+html.theme-preset-deep-dark .dark\:border-zinc-800 {
+  border-color: #18181b !important;
+}
+
+/* ==========================================================================
+   DYNAMIC PRIMARY ACCENT COLOR ENGINE
+   ========================================================================== */
+:root {
+  --primary-accent: #2563eb;
+}
+
+/* Real-time propagation of accent color to all UI actions & highlights */
+.text-primary-accent,
+.text-blue-600,
+html.dark .dark\:text-blue-400 {
   color: var(--primary-accent) !important;
 }
-.border-primary-accent {
+
+.bg-primary-accent,
+.bg-blue-600,
+html.dark .dark\:bg-blue-600 {
+  background-color: var(--primary-accent) !important;
+}
+
+.border-primary-accent,
+.border-blue-600,
+.border-l-blue-600,
+.border-blue-500,
+html.dark .dark\:border-blue-600 {
   border-color: var(--primary-accent) !important;
+}
+
+.ring-blue-600,
+.ring-blue-500,
+.focus\:ring-blue-500:focus {
+  --tw-ring-color: var(--primary-accent) !important;
+}
+
+/* Native selection accent */
+::selection {
+  background-color: var(--primary-accent) !important;
+  color: #ffffff !important;
 }
 
 /* Chrome Extension Popup sizing guarantee: forces exact bounds to prevent 25px collapse */
