@@ -19,6 +19,7 @@ import { MathBlock } from './extensions/MathBlock';
 import { MathInline } from './extensions/MathInline';
 import { MermaidBlock } from './extensions/MermaidBlock';
 import { PdfAttachmentNode } from './extensions/PdfAttachment';
+import { SpreadsheetNode } from './extensions/SpreadsheetNode';
 import { LinkCardNode } from './extensions/LinkCard';
 import { EditorToolbar } from './EditorToolbar';
 import { MinimalistEditorHeader } from './MinimalistEditorHeader';
@@ -201,6 +202,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       MathInline,
       MermaidBlock,
       PdfAttachmentNode,
+      SpreadsheetNode,
       LinkCardNode,
     ],
     content: note.content || '',

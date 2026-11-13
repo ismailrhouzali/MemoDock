@@ -5,6 +5,8 @@ import { normalizeContent, decodeHtmlEntities, normalizeEscapedMarkdown } from '
 import { processMathematics } from '../src/services/importEngine/mathProcessor.ts';
 import { convertTsvToHtmlTable, isTsvTable } from '../src/services/importEngine/tableProcessor.ts';
 import { convertTextToTipTapHtml } from '../src/services/importEngine/smartImportEngine.ts';
+import { parseCsv, exportToCsv } from '../src/services/spreadsheet/csvEngine.ts';
+import { DEFAULT_PROFILES, DEFAULT_KEYBOARD_SHORTCUTS } from '../src/db/db.ts';
 
 console.log('=== Running NoteBook System & Extension Verification Tests ===\n');
 
@@ -245,6 +247,39 @@ assert(Array.isArray(parsedBackup.notes) && parsedBackup.notes.length === 1, 'Ba
 assert(Array.isArray(parsedBackup.folders) && parsedBackup.folders.length === 1, 'Backup contains folders array');
 assert(Array.isArray(parsedBackup.tags) && parsedBackup.tags.length === 1, 'Backup contains tags array');
 assert(parsedBackup.notes[0].tags.includes('Work'), 'Backup note preserves tags');
+
+// 14. Test RFC 4180 CSV Engine (Delimiter detection, Quoting, Escaping)
+const sampleCsv = `Product,Price,"Description, Details",Quantity
+"Laptop Pro, 16""",1299.99,"Fast, reliable and light",5
+Phone,799.50,"AMOLED screen",12`;
+
+const parsedCsv = parseCsv(sampleCsv);
+assert(parsedCsv.headers.length === 4, 'CSV parser extracts 4 columns');
+assert(parsedCsv.headers[2] === 'Description, Details', 'CSV parser preserves comma inside quoted header');
+assert(parsedCsv.rows.length === 2, 'CSV parser extracts 2 data rows');
+assert(parsedCsv.rows[0][0] === 'Laptop Pro, 16"', 'CSV parser handles escaped quotes and commas correctly');
+assert(parsedCsv.rows[0][1] === '1299.99', 'CSV parser extracts numeric cell');
+
+const reExportedCsv = exportToCsv(parsedCsv.headers, parsedCsv.rows);
+assert(reExportedCsv.includes('"Laptop Pro, 16"""'), 'CSV exporter re-quotes fields with quotes');
+assert(reExportedCsv.includes('"Description, Details"'), 'CSV exporter re-quotes fields with commas');
+
+// 15. Test MemoDock V3 Workspace Profiles
+assert(Array.isArray(DEFAULT_PROFILES) && DEFAULT_PROFILES.length >= 5, 'DEFAULT_PROFILES contains at least 5 curated profiles');
+const profileTypes = DEFAULT_PROFILES.map(p => p.type);
+assert(profileTypes.includes('study'), 'Profiles include Study & Courses');
+assert(profileTypes.includes('development'), 'Profiles include Engineering & Code');
+assert(profileTypes.includes('research'), 'Profiles include Academic Research');
+assert(profileTypes.includes('writing'), 'Profiles include Distraction-Free Writing');
+const studyProfile = DEFAULT_PROFILES.find(p => p.type === 'study');
+assert(studyProfile.sidebarWidth === 270, 'Study profile configures optimal sidebar width');
+assert(studyProfile.outlineVisible === true, 'Study profile enables outline');
+
+// 16. Test MemoDock V3 Keyboard Shortcuts
+assert(Array.isArray(DEFAULT_KEYBOARD_SHORTCUTS) && DEFAULT_KEYBOARD_SHORTCUTS.length >= 8, 'DEFAULT_KEYBOARD_SHORTCUTS defines standard hotkeys');
+const shortcutKeys = DEFAULT_KEYBOARD_SHORTCUTS.map(s => s.key);
+assert(shortcutKeys.some(k => k.includes('Ctrl + N')), 'Shortcuts include Ctrl+N for new note');
+assert(shortcutKeys.some(k => k.includes('Ctrl + K')), 'Shortcuts include Ctrl+K for command palette / search');
 
 console.log(`\n========================================`);
 console.log(`TOTAL TESTS: ${passedTests + failedTests} | PASSED: ${passedTests} | FAILED: ${failedTests}`);

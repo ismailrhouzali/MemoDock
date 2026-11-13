@@ -11,6 +11,9 @@ export function useTheme() {
       if (settings?.theme) {
         setThemeState(settings.theme);
       }
+      if (settings?.accentColor) {
+        document.documentElement.style.setProperty('--primary-accent', settings.accentColor);
+      }
     });
   }, []);
 

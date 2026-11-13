@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Sliders,
   Palette,
   Sparkles,
-  ShieldCheck,
   Eye,
   EyeOff,
   Check,
@@ -17,23 +16,41 @@ import {
   RefreshCw,
   FolderOpen,
   FileText,
-  AlertCircle,
   ExternalLink,
   Feather,
   Key,
+  Command,
+  BookOpen,
+  Code,
+  Compass,
+  PenTool,
+  CheckCircle2,
+  Download,
+  Upload,
+  Monitor,
+  Sun,
+  Moon,
+  AlignLeft,
+  Columns,
 } from 'lucide-react';
 import {
   AppSettings,
   ThemeMode,
+  ThemePreset,
   EditorWidth,
   EditorFont,
   EditorFontSize,
   NoteListDisplayMode,
   SidebarMode,
   StorageMode,
+  WorkspaceLayoutPreset,
+  WorkspaceProfile,
+  KeyboardShortcut,
 } from '../../db/types';
+import { DEFAULT_PROFILES, DEFAULT_KEYBOARD_SHORTCUTS } from '../../db/db';
 import { storageManager } from '../../services/storage/storageManager';
 import { googleDriveService } from '../../services/googleDriveService';
+import { exportService } from '../../services/exportService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -44,7 +61,34 @@ interface SettingsModalProps {
   onSetTheme: (theme: ThemeMode) => void;
 }
 
-type TabKey = 'general' | 'notelist' | 'sidebar' | 'editor' | 'storage' | 'gdrive' | 'ai';
+type TabKey =
+  | 'general'
+  | 'profiles'
+  | 'workspace'
+  | 'editor'
+  | 'shortcuts'
+  | 'storage'
+  | 'gdrive'
+  | 'ai';
+
+const ACCENT_COLORS = [
+  { name: 'Classic Blue', hex: '#2563eb' },
+  { name: 'Warm Amber', hex: '#d97706' },
+  { name: 'Emerald Green', hex: '#10b981' },
+  { name: 'Modern Violet', hex: '#8b5cf6' },
+  { name: 'Rose Red', hex: '#f43f5e' },
+  { name: 'Cyan Blue', hex: '#06b6d4' },
+  { name: 'Slate Neutral', hex: '#475569' },
+];
+
+const THEME_PRESET_OPTIONS: { id: ThemePreset; name: string; desc: string; bgClass: string; dark: boolean }[] = [
+  { id: 'default-light', name: 'Clean White', desc: 'Minimalist paper with crisp zinc contrast', bgClass: 'bg-white border-zinc-200 text-zinc-900', dark: false },
+  { id: 'warm-light', name: 'Warm Sepia', desc: 'Comfortable amber paper tone for long reading sessions', bgClass: 'bg-[#faf8f5] border-amber-200 text-stone-900', dark: false },
+  { id: 'cool-light', name: 'Cool Frost', desc: 'Crisp light slate with cool blue undertones', bgClass: 'bg-[#f8fafc] border-slate-200 text-slate-900', dark: false },
+  { id: 'soft-gray', name: 'Soft Gray', desc: 'Subtle neutral low-contrast studio gray', bgClass: 'bg-[#f4f4f5] border-zinc-300 text-zinc-800', dark: false },
+  { id: 'midnight-dark', name: 'Midnight Navy', desc: 'Deep high-contrast blue-dark dark mode', bgClass: 'bg-[#0f172a] border-slate-700 text-slate-100', dark: true },
+  { id: 'deep-dark', name: 'Deep AMOLED', desc: 'Pure jet black for maximum OLED battery savings', bgClass: 'bg-black border-zinc-800 text-zinc-100', dark: true },
+];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -63,6 +107,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [customDriveToken, setCustomDriveToken] = useState('');
   const [showCustomTokenInput, setShowCustomTokenInput] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const [shortcutFilter, setShortcutFilter] = useState<'all' | 'navigation' | 'editor' | 'workspace'>('all');
+  const [isRestoringJson, setIsRestoringJson] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -72,15 +119,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (toSave.theme !== currentTheme) {
       onSetTheme(toSave.theme);
     }
+    if (toSave.accentColor) {
+      document.documentElement.style.setProperty('--primary-accent', toSave.accentColor);
+    }
     setSavedFeedback(true);
     setTimeout(() => {
       setSavedFeedback(false);
       onClose();
-    }, 600);
+    }, 500);
   };
 
   const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleApplyProfile = (profile: WorkspaceProfile) => {
+    setLocalSettings((prev) => ({
+      ...prev,
+      activeProfileId: profile.id,
+      theme: profile.theme,
+      themePreset: profile.themePreset,
+      accentColor: profile.accentColor || prev.accentColor,
+      sidebarWidth: profile.sidebarWidth || prev.sidebarWidth,
+      outlinePosition: profile.outlinePosition || prev.outlinePosition,
+      editorWidth: profile.editorWidth,
+      fontFamily: profile.fontFamily,
+      fontSize: profile.fontSize,
+      editorLayout: {
+        ...prev.editorLayout,
+        mode: profile.layoutMode,
+        showTableOfContents: profile.outlineVisible,
+      },
+    }));
+    setSyncStatusMsg(`Profile "${profile.name}" applied successfully. Click Save Preferences to confirm.`);
   };
 
   const handlePickLocalFolder = async () => {
@@ -122,6 +193,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }));
     } else {
       setSyncStatusMsg(`Sync error: ${result.error || 'Failed'}`);
+    }
+  };
+
+  const handleExportJsonBackup = async () => {
+    try {
+      await exportService.downloadJsonBackup();
+      setSyncStatusMsg('Full JSON backup downloaded successfully.');
+    } catch (err: any) {
+      setSyncStatusMsg(`Export error: ${err.message || 'Failed'}`);
+    }
+  };
+
+  const handleRestoreJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsRestoringJson(true);
+    setSyncStatusMsg('Restoring data from JSON backup file...');
+    try {
+      const text = await file.text();
+      const res = await exportService.restoreFromJsonBackup(text);
+      setSyncStatusMsg(`Successfully restored ${res.notesRestored} notes from backup.`);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err: any) {
+      setSyncStatusMsg(`Restore failed: ${err.message || 'Invalid backup format'}`);
+    } finally {
+      setIsRestoringJson(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -180,33 +278,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const filteredShortcuts = DEFAULT_KEYBOARD_SHORTCUTS.filter((s: KeyboardShortcut) => {
+    if (shortcutFilter === 'all') return true;
+    return s.category === shortcutFilter;
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="fixed inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float overflow-hidden flex flex-col z-10 text-xs max-h-[90vh]">
+      <div className="relative w-full max-w-3xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float overflow-hidden flex flex-col z-10 text-xs max-h-[92vh]">
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200/80 dark:border-zinc-800/80 bg-stone-50/50 dark:bg-zinc-950/50">
           <div className="flex items-center gap-2 font-semibold text-sm text-stone-900 dark:text-stone-100">
-            <Sliders className="w-4 h-4 text-amber-600 dark:text-amber-500" />
-            <span>Preferences & Settings</span>
+            <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>MemoDock Preferences & Settings</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 rounded"
+            className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 rounded transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-stone-200/60 dark:border-zinc-800/60 px-5 gap-1 bg-stone-50/30 dark:bg-zinc-950/30 overflow-x-auto select-none">
+        <div className="flex border-b border-stone-200/60 dark:border-zinc-800/60 px-4 gap-1 bg-stone-50/30 dark:bg-zinc-950/30 overflow-x-auto select-none">
           {[
-            { id: 'general', label: 'General', icon: Sliders },
-            { id: 'notelist', label: 'Note List', icon: List },
-            { id: 'sidebar', label: 'Sidebar', icon: Layout },
-            { id: 'editor', label: 'Editor & TOC', icon: Type },
+            { id: 'general', label: 'General & Appearance', icon: Palette },
+            { id: 'profiles', label: 'Profiles', icon: Compass },
+            { id: 'workspace', label: 'Workspace & Layout', icon: Layout },
+            { id: 'editor', label: 'Typography & Outline', icon: Type },
+            { id: 'shortcuts', label: 'Shortcuts', icon: Command },
             { id: 'storage', label: 'Local Storage', icon: HardDrive },
             { id: 'gdrive', label: 'Google Drive', icon: Cloud },
             { id: 'ai', label: 'AI Assistant', icon: Sparkles },
@@ -218,9 +322,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as TabKey)}
-                className={`py-2.5 px-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap text-xs ${
+                className={`py-2.5 px-3 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap text-xs ${
                   isActive
-                    ? 'border-amber-600 text-stone-900 dark:text-stone-100 font-semibold'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-semibold'
                     : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
                 }`}
               >
@@ -233,12 +337,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Notification Banner */}
         {syncStatusMsg && (
-          <div className="px-5 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-b border-amber-200 dark:border-amber-800/60 text-[11px] flex items-center justify-between">
+          <div className="px-5 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-b border-blue-200 dark:border-blue-800/60 text-[11px] flex items-center justify-between">
             <span className="truncate">{syncStatusMsg}</span>
             <button
               type="button"
               onClick={() => setSyncStatusMsg(null)}
-              className="text-amber-600 dark:text-amber-400 font-bold ml-2 hover:underline"
+              className="text-blue-600 dark:text-blue-400 font-bold ml-2 hover:underline"
             >
               ×
             </button>
@@ -246,43 +350,133 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto space-y-5 max-h-[60vh]">
-          {/* TAB 1: GENERAL */}
+        <div className="p-5 overflow-y-auto space-y-5 max-h-[62vh]">
+
+          {/* TAB 1: GENERAL & APPEARANCE */}
           {activeTab === 'general' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Theme Mode */}
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-2">
-                  Appearance Theme
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
+                  Appearance Mode
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['system', 'light', 'dark'] as ThemeMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => updateSetting('theme', mode)}
-                      className={`py-2 px-3 rounded-lg border text-xs font-medium capitalize transition flex items-center justify-center gap-2 ${
-                        localSettings.theme === mode
-                          ? 'border-amber-600 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 shadow-sm'
-                          : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800/50 text-stone-600 dark:text-zinc-400'
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
+                  {[
+                    { id: 'system' as ThemeMode, label: 'System Automatic', icon: Monitor },
+                    { id: 'light' as ThemeMode, label: 'Light Mode', icon: Sun },
+                    { id: 'dark' as ThemeMode, label: 'Dark Mode', icon: Moon },
+                  ].map((mode) => {
+                    const Icon = mode.icon;
+                    const isSelected = localSettings.theme === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => updateSetting('theme', mode.id)}
+                        className={`py-2 px-3 rounded-lg border text-xs font-medium transition flex items-center justify-center gap-2 ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 shadow-sm'
+                            : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800/50 text-stone-600 dark:text-zinc-400'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{mode.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
+              {/* Theme Preset Palettes */}
               <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
+                  Visual Theme Preset
+                </label>
+                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
+                  Select a refined color atmosphere calibrated for reading comfort and high legibility.
+                </p>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {THEME_PRESET_OPTIONS.map((preset) => {
+                    const isSelected = localSettings.themePreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setLocalSettings((prev) => ({
+                            ...prev,
+                            themePreset: preset.id,
+                            theme: preset.dark ? 'dark' : 'light',
+                          }));
+                        }}
+                        className={`p-2.5 rounded-lg border text-left transition flex flex-col justify-between ${preset.bgClass} ${
+                          isSelected
+                            ? 'ring-2 ring-blue-600 shadow-sm'
+                            : 'opacity-85 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-semibold text-xs mb-1">
+                          <span>{preset.name}</span>
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
+                        </div>
+                        <span className="text-[10px] opacity-75 leading-tight">{preset.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Accent Color */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
+                  Primary Accent Color
+                </label>
+                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
+                  Highlights active selections, primary buttons, and link tags across MemoDock.
+                </p>
+                <div className="flex items-center gap-3">
+                  {ACCENT_COLORS.map((c) => {
+                    const isSelected = (localSettings.accentColor || '#2563eb').toLowerCase() === c.hex.toLowerCase();
+                    return (
+                      <button
+                        key={c.hex}
+                        type="button"
+                        title={c.name}
+                        onClick={() => updateSetting('accentColor', c.hex)}
+                        style={{ backgroundColor: c.hex }}
+                        className={`w-7 h-7 rounded-full transition flex items-center justify-center shadow-sm ${
+                          isSelected ? 'ring-2 ring-offset-2 ring-stone-900 dark:ring-offset-zinc-900' : 'hover:scale-110'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                      </button>
+                    );
+                  })}
+                  <div className="flex items-center gap-1.5 ml-2 pl-3 border-l border-stone-200 dark:border-zinc-800">
+                    <input
+                      type="color"
+                      value={localSettings.accentColor || '#2563eb'}
+                      onChange={(e) => updateSetting('accentColor', e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                      title="Custom hex color"
+                    />
+                    <span className="font-mono text-[11px] text-stone-500">{localSettings.accentColor || '#2563eb'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto-Save Delay */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   Auto-Save Delay
                 </label>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-2">
-                  Time to wait after typing stops before automatically saving notes to IndexedDB.
+                  Time to wait after typing stops before automatically persisting notes into local IndexedDB.
                 </p>
                 <select
                   value={localSettings.autoSaveDelay}
                   onChange={(e) => updateSetting('autoSaveDelay', Number(e.target.value))}
-                  className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value={300}>Instant (300 ms)</option>
                   <option value={600}>Balanced (600 ms) — Recommended</option>
@@ -291,38 +485,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </select>
               </div>
 
+              {/* Spellcheck & Feedback */}
               <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={localSettings.spellCheck}
                     onChange={(e) => updateSetting('spellCheck', e.target.checked)}
-                    className="accent-amber-600 rounded"
+                    className="accent-blue-600 rounded"
                   />
                   <span className="text-stone-700 dark:text-stone-300 font-medium">
-                    Enable browser spellcheck in editor
+                    Enable native browser spellcheck inside note editor
                   </span>
                 </label>
-              </div>
 
-              {/* Feedback and Community */}
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl flex items-center justify-between gap-3">
+                <div className="p-3 bg-stone-50 dark:bg-zinc-800/40 border border-stone-200 dark:border-zinc-700/60 rounded-xl flex items-center justify-between gap-3 mt-3">
                   <div>
-                    <h4 className="font-semibold text-xs text-amber-900 dark:text-amber-200">
-                      Feedback & Feature Suggestions
+                    <h4 className="font-semibold text-xs text-stone-900 dark:text-stone-100">
+                      MemoDock Open Source Project
                     </h4>
-                    <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
-                      Help us improve MemoDock. Report bugs or suggest new features via Google Forms.
+                    <p className="text-[11px] text-stone-500 dark:text-zinc-400">
+                      Found an issue or want to suggest an improvement? Contribute on GitHub.
                     </p>
                   </div>
                   <a
-                    href="https://forms.gle/notebook-feedback-placeholder"
+                    href="https://github.com/ismailrhouzali/MemoDock"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm transition flex-shrink-0"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition flex-shrink-0"
                   >
-                    <span>Send Feedback</span>
+                    <span>GitHub Repo</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -330,100 +522,231 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: NOTE LIST DISPLAY */}
-          {activeTab === 'notelist' && (
+          {/* TAB 2: WORKSPACE PROFILES */}
+          {activeTab === 'profiles' && (
             <div className="space-y-4">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  Note List Display Mode
-                </label>
-                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Customize the density and minimalist feel of the notes list in the sidebar.
+                <h3 className="font-semibold text-sm text-stone-900 dark:text-stone-100 mb-1">
+                  Curated Workspace Profiles
+                </h3>
+                <p className="text-[11px] text-stone-400 dark:text-zinc-500">
+                  Instantly configure MemoDock for specific disciplines: layout density, sidebar width, typography, and outline visibility in one click.
                 </p>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {[
-                    {
-                      id: 'detailed' as NoteListDisplayMode,
-                      title: 'Detailed',
-                      desc: 'Title, timestamp, text snippet, and tags',
-                    },
-                    {
-                      id: 'compact' as NoteListDisplayMode,
-                      title: 'Compact',
-                      desc: 'Title, relative date, and folder badge',
-                    },
-                    {
-                      id: 'minimal' as NoteListDisplayMode,
-                      title: 'Minimalist',
-                      desc: 'Clean title only with subtle active indicator',
-                    },
-                  ].map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => updateSetting('noteListMode', mode.id)}
-                      className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
-                        localSettings.noteListMode === mode.id
-                          ? 'border-amber-600 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 ring-1 ring-amber-600'
-                          : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800/40 text-stone-700 dark:text-zinc-300'
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {DEFAULT_PROFILES.map((prof) => {
+                  const isCurrent = localSettings.activeProfileId === prof.id;
+                  const ProfileIcon =
+                    prof.type === 'study'
+                      ? BookOpen
+                      : prof.type === 'development'
+                      ? Code
+                      : prof.type === 'research'
+                      ? Compass
+                      : prof.type === 'writing'
+                      ? PenTool
+                      : Layout;
+
+                  return (
+                    <div
+                      key={prof.id}
+                      className={`p-3.5 rounded-xl border transition flex items-start justify-between gap-4 ${
+                        isCurrent
+                          ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-1 ring-blue-600'
+                          : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50/60 dark:hover:bg-zinc-800/40'
                       }`}
                     >
-                      <div className="font-semibold text-xs mb-1 flex items-center justify-between">
-                        <span>{mode.title}</span>
-                        {localSettings.noteListMode === mode.id && (
-                          <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                        )}
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+                          style={{ backgroundColor: prof.accentColor || '#2563eb' }}
+                        >
+                          <ProfileIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-xs text-stone-900 dark:text-stone-100">
+                              {prof.name}
+                            </span>
+                            {isCurrent && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white">
+                                Active Profile
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed mb-2">
+                            {prof.description}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-stone-500 dark:text-zinc-400">
+                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
+                              Layout: <strong className="capitalize text-stone-700 dark:text-zinc-200">{prof.layoutMode}</strong>
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
+                              Font: <strong className="capitalize text-stone-700 dark:text-zinc-200">{prof.fontFamily}</strong>
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
+                              Theme: <strong className="capitalize text-stone-700 dark:text-zinc-200">{prof.theme} ({prof.themePreset})</strong>
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
+                              Sidebar: <strong className="text-stone-700 dark:text-zinc-200">{prof.sidebarWidth || 260}px</strong>
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
+                              Outline: <strong className="text-stone-700 dark:text-zinc-200">{prof.outlineVisible ? 'Enabled' : 'Hidden'}</strong>
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-[10px] text-stone-400 dark:text-zinc-500 leading-tight">
-                        {mode.desc}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApplyProfile(prof)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${
+                          isCurrent
+                            ? 'bg-blue-600 text-white cursor-default'
+                            : 'bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 shadow-sm'
+                        }`}
+                      >
+                        {isCurrent ? 'Current' : 'Apply Profile'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* TAB 3: SIDEBAR VISIBILITY */}
-          {activeTab === 'sidebar' && (
+          {/* TAB 3: WORKSPACE & SIDEBAR */}
+          {activeTab === 'workspace' && (
             <div className="space-y-4">
+              {/* Presets */}
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  Sidebar Layout Mode
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
+                  Workspace Layout Experience
                 </label>
-                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Choose how the left sidebar appears when expanded.
+                <div className="grid grid-cols-3 gap-2.5 mt-2">
+                  {[
+                    {
+                      id: 'minimal' as WorkspaceLayoutPreset,
+                      title: 'Minimalist',
+                      icon: Feather,
+                      desc: 'TabNotebook clean focus, floating toolbar, auto-title, no clutter',
+                    },
+                    {
+                      id: 'balanced' as WorkspaceLayoutPreset,
+                      title: 'Balanced',
+                      icon: Layout,
+                      desc: 'Contextual sidebar, clean single toolbar, optional outline',
+                    },
+                    {
+                      id: 'complete' as WorkspaceLayoutPreset,
+                      title: 'Complete',
+                      icon: Columns,
+                      desc: 'Full power suite with pinned outline, code and tables',
+                    },
+                  ].map((p) => {
+                    const Icon = p.icon;
+                    const isSelected = localSettings.editorLayout.mode === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setLocalSettings((prev) => ({
+                            ...prev,
+                            noteListMode: p.id === 'minimal' ? 'minimal' : prev.noteListMode,
+                            editorLayout: {
+                              ...prev.editorLayout,
+                              mode: p.id,
+                              showToolbar: p.id !== 'minimal',
+                              showTableOfContents: p.id === 'complete',
+                            },
+                          }));
+                        }}
+                        className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-1 ring-blue-600'
+                            : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800/40 text-stone-700 dark:text-zinc-300'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-semibold text-xs mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Icon className="w-3.5 h-3.5 text-blue-600" />
+                              {p.title}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                          </div>
+                          <span className="text-[10px] text-stone-400 dark:text-zinc-500 leading-tight block">
+                            {p.desc}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sidebar Width Slider */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-stone-800 dark:text-stone-200">
+                    Sidebar Width
+                  </label>
+                  <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold">
+                    {localSettings.sidebarWidth || 260}px
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-2">
+                  Adjust default sidebar width (you can also drag the right edge resizer in the workspace).
                 </p>
+                <input
+                  type="range"
+                  min={200}
+                  max={450}
+                  step={5}
+                  value={localSettings.sidebarWidth || 260}
+                  onChange={(e) => updateSetting('sidebarWidth', Number(e.target.value))}
+                  className="w-full accent-blue-600 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-stone-400 mt-1 font-mono">
+                  <span>200px (Compact)</span>
+                  <span>260px (Default)</span>
+                  <span>450px (Wide)</span>
+                </div>
+              </div>
+
+              {/* Note List Density */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
+                  Note List Density
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'full' as SidebarMode, label: 'Full Sidebar' },
-                    { id: 'compact' as SidebarMode, label: 'Compact Width' },
-                    { id: 'icons' as SidebarMode, label: 'Icons Only' },
-                  ].map((mode) => (
+                    { id: 'minimal' as NoteListDisplayMode, label: 'Minimalist (Title Only)' },
+                    { id: 'compact' as NoteListDisplayMode, label: 'Compact (Title + Date)' },
+                    { id: 'detailed' as NoteListDisplayMode, label: 'Detailed (+ Snippet & Tags)' },
+                  ].map((m) => (
                     <button
-                      key={mode.id}
+                      key={m.id}
                       type="button"
-                      onClick={() =>
-                        setLocalSettings((prev) => ({
-                          ...prev,
-                          sidebarVisibility: { ...prev.sidebarVisibility, mode: mode.id },
-                        }))
-                      }
-                      className={`py-2 px-3 rounded-lg border text-xs font-medium transition ${
-                        localSettings.sidebarVisibility.mode === mode.id
-                          ? 'border-amber-600 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'
-                          : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800/50 text-stone-600 dark:text-zinc-400'
+                      onClick={() => updateSetting('noteListMode', m.id)}
+                      className={`py-2 px-2.5 rounded-lg border text-xs font-medium transition text-center ${
+                        localSettings.noteListMode === m.id
+                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300'
+                          : 'border-stone-200 dark:border-zinc-800 text-stone-600 dark:text-zinc-400'
                       }`}
                     >
-                      {mode.label}
+                      {m.label}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Sidebar Sections */}
               <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-2">
-                  Visible Sidebar Sections
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
+                  Visible Sidebar Navigation Links
                 </label>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {[
@@ -432,8 +755,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     { key: 'showRecents', label: 'Recent Notes' },
                     { key: 'showArchived', label: 'Archived Notes' },
                     { key: 'showTrash', label: 'Trash' },
-                    { key: 'showFolders', label: 'Folders Section' },
-                    { key: 'showTags', label: 'Tags Section' },
+                    { key: 'showFolders', label: 'Folders Navigation' },
+                    { key: 'showTags', label: 'Tags Filter' },
                   ].map((section) => (
                     <label
                       key={section.key}
@@ -441,9 +764,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       <input
                         type="checkbox"
-                        checked={
-                          (localSettings.sidebarVisibility as any)[section.key] !== false
-                        }
+                        checked={(localSettings.sidebarVisibility as any)[section.key] !== false}
                         onChange={(e) => {
                           const val = e.target.checked;
                           setLocalSettings((prev) => ({
@@ -454,7 +775,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             },
                           }));
                         }}
-                        className="accent-amber-600 rounded"
+                        className="accent-blue-600 rounded"
                       />
                       <span className="text-stone-700 dark:text-zinc-300">{section.label}</span>
                     </label>
@@ -464,84 +785,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: EDITOR LAYOUT & TABLE OF CONTENTS */}
+          {/* TAB 4: TYPOGRAPHY & OUTLINE */}
           {activeTab === 'editor' && (
             <div className="space-y-4">
-              {/* Workspace Experience Mode Preset */}
-              <div className="p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-2">
-                <label className="block font-bold text-xs text-stone-900 dark:text-stone-100">
-                  Workspace Experience Mode
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        noteListMode: 'minimal',
-                        editorLayout: {
-                          ...prev.editorLayout,
-                          mode: 'minimal',
-                          showToolbar: false,
-                          showBreadcrumbs: false,
-                          showModifiedDate: false,
-                          showTableOfContents: false,
-                        },
-                      }));
-                    }}
-                    className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
-                      localSettings.editorLayout.mode === 'minimal'
-                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 shadow-sm'
-                        : 'border-stone-200 dark:border-zinc-800 hover:bg-white dark:hover:bg-zinc-800/60 text-stone-600 dark:text-zinc-400'
-                    }`}
-                  >
-                    <div className="font-semibold text-xs flex items-center gap-1.5 mb-1">
-                      <Feather className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Minimalist (TabNotebook Style)</span>
-                    </div>
-                    <p className="text-[10px] leading-tight opacity-80">
-                      Pure digital paper. Minimalist sidebar, floating pill toolbar, auto-title generation, and distraction-free writing.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        noteListMode: 'detailed',
-                        editorLayout: {
-                          ...prev.editorLayout,
-                          mode: 'standard',
-                          showToolbar: true,
-                          showBreadcrumbs: true,
-                          showModifiedDate: true,
-                          showTableOfContents: true,
-                        },
-                      }));
-                    }}
-                    className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
-                      localSettings.editorLayout.mode === 'standard'
-                        ? 'border-stone-800 dark:border-stone-200 bg-stone-100 dark:bg-zinc-800 text-stone-900 dark:text-stone-100 shadow-sm'
-                        : 'border-stone-200 dark:border-zinc-800 hover:bg-white dark:hover:bg-zinc-800/60 text-stone-600 dark:text-zinc-400'
-                    }`}
-                  >
-                    <div className="font-semibold text-xs flex items-center gap-1.5 mb-1">
-                      <Layout className="w-3.5 h-3.5 text-stone-800 dark:text-stone-200" />
-                      <span>Complete Workspace</span>
-                    </div>
-                    <p className="text-[10px] leading-tight opacity-80">
-                      Full power suite with fixed sticky formatting bar, pinned right outline TOC, folder/tag navigation, and metadata.
-                    </p>
-                  </button>
-                </div>
-              </div>
-
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
                   Typography & Reading Experience
                 </label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mb-1">
                       Font Family
@@ -551,7 +802,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onChange={(e) => updateSetting('fontFamily', e.target.value as EditorFont)}
                       className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 dark:text-zinc-200"
                     >
-                      <option value="sans">Clean Sans-Serif (Inter)</option>
+                      <option value="sans">Clean Sans (Inter)</option>
                       <option value="serif">Bookish Serif (Merriweather)</option>
                       <option value="mono">Technical Monospace (JetBrains)</option>
                     </select>
@@ -570,35 +821,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <option value="lg">Spacious (18px)</option>
                     </select>
                   </div>
-                </div>
-              </div>
-
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  Editor Width & Margins
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(['narrow', 'normal', 'wide', 'full'] as EditorWidth[]).map((w) => (
-                    <button
-                      key={w}
-                      type="button"
-                      onClick={() => updateSetting('editorWidth', w)}
-                      className={`py-1.5 px-2 rounded-lg border text-xs font-medium capitalize transition ${
-                        localSettings.editorWidth === w
-                          ? 'border-amber-600 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 font-semibold'
-                          : 'border-stone-200 dark:border-zinc-800 text-stone-600 dark:text-zinc-400'
-                      }`}
+                  <div>
+                    <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mb-1">
+                      Editor Canvas Width
+                    </span>
+                    <select
+                      value={localSettings.editorWidth}
+                      onChange={(e) => updateSetting('editorWidth', e.target.value as EditorWidth)}
+                      className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 dark:text-zinc-200"
                     >
-                      {w}
-                    </button>
-                  ))}
+                      <option value="narrow">Narrow (680px)</option>
+                      <option value="normal">Standard (800px)</option>
+                      <option value="wide">Wide (1000px)</option>
+                      <option value="full">Full Canvas (100%)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* Table of Contents Section */}
+              {/* Table of Contents / Outline System */}
               <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 space-y-3">
-                <label className="block font-medium text-stone-700 dark:text-stone-300">
-                  Right-Hand Table of Contents (Outline)
+                <label className="block font-semibold text-stone-800 dark:text-stone-200">
+                  Document Outline (Table of Contents)
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -613,48 +857,73 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         },
                       }))
                     }
-                    className="accent-amber-600 rounded"
+                    className="accent-blue-600 rounded"
                   />
-                  <span className="text-stone-700 dark:text-stone-300">
-                    Show Table of Contents panel for long notes with headings
+                  <span className="text-stone-700 dark:text-stone-300 font-medium">
+                    Show interactive Outline panel for long notes with headings
                   </span>
                 </label>
 
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-stone-500 dark:text-zinc-400">Outline Depth:</span>
-                  {(['h2', 'h3', 'h4'] as const).map((lvl) => (
-                    <button
-                      key={lvl}
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((prev) => ({
-                          ...prev,
-                          editorLayout: {
-                            ...prev.editorLayout,
-                            tocLevel: lvl,
-                          },
-                        }))
-                      }
-                      className={`px-2 py-0.5 rounded border text-[11px] uppercase ${
-                        localSettings.editorLayout.tocLevel === lvl
-                          ? 'border-amber-600 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300 font-bold'
-                          : 'border-stone-200 dark:border-zinc-800 text-stone-500'
-                      }`}
-                    >
-                      {lvl.toUpperCase()}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mb-1">
+                      Outline Position
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['left', 'right'] as const).map((pos) => (
+                        <button
+                          key={pos}
+                          type="button"
+                          onClick={() => updateSetting('outlinePosition', pos)}
+                          className={`py-1 px-2 rounded border text-xs capitalize ${
+                            (localSettings.outlinePosition || 'right') === pos
+                              ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 font-bold'
+                              : 'border-stone-200 dark:border-zinc-800 text-stone-600 dark:text-zinc-400'
+                          }`}
+                        >
+                          {pos} Side
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mb-1">
+                      Maximum Heading Depth
+                    </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['h2', 'h3', 'h4'] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              editorLayout: { ...prev.editorLayout, tocLevel: lvl },
+                            }))
+                          }
+                          className={`py-1 px-2 rounded border text-xs uppercase ${
+                            localSettings.editorLayout.tocLevel === lvl
+                              ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 font-bold'
+                              : 'border-stone-200 dark:border-zinc-800 text-stone-600 dark:text-zinc-400'
+                          }`}
+                        >
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Minimalist Editor Elements */}
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 space-y-2">
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  Minimalist Chrome Controls
+              {/* Status & Chrome Metrics */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
+                  Editor Chrome & Metrics
                 </label>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {[
-                    { key: 'showToolbar', label: 'Formatting Toolbar' },
+                    { key: 'showToolbar', label: 'Top Formatting Toolbar' },
                     { key: 'showBreadcrumbs', label: 'Breadcrumb Navigation' },
                     { key: 'showWordCount', label: 'Word Counter' },
                     { key: 'showReadingTime', label: 'Reading Time Estimate' },
@@ -674,7 +943,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             },
                           }));
                         }}
-                        className="accent-amber-600 rounded"
+                        className="accent-blue-600 rounded"
                       />
                       <span className="text-stone-700 dark:text-zinc-300">{item.label}</span>
                     </label>
@@ -684,15 +953,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 5: LOCAL STORAGE FOLDER */}
+          {/* TAB 5: KEYBOARD SHORTCUTS MANAGER */}
+          {activeTab === 'shortcuts' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-sm text-stone-900 dark:text-stone-100 mb-0.5">
+                    Keyboard Shortcuts
+                  </h3>
+                  <p className="text-[11px] text-stone-400 dark:text-zinc-500">
+                    Boost your productivity with native hotkeys active across MemoDock.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-800 p-0.5 rounded-lg text-[11px]">
+                  {(['all', 'navigation', 'editor', 'workspace'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setShortcutFilter(cat)}
+                      className={`px-2 py-0.5 rounded capitalize font-medium ${
+                        shortcutFilter === cat
+                          ? 'bg-white dark:bg-zinc-700 text-stone-900 dark:text-white shadow-xs'
+                          : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5 divide-y divide-stone-100 dark:divide-zinc-800/80 max-h-[46vh] overflow-y-auto">
+                {filteredShortcuts.map((sc: KeyboardShortcut) => (
+                  <div key={sc.id} className="pt-2 first:pt-0 flex items-center justify-between py-1.5">
+                    <div>
+                      <div className="font-semibold text-xs text-stone-800 dark:text-stone-200">
+                        {sc.label}
+                      </div>
+                      <div className="text-[10px] text-stone-400 dark:text-zinc-500">
+                        {sc.description}
+                      </div>
+                    </div>
+                    <kbd className="px-2 py-1 bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded text-[11px] font-mono text-stone-800 dark:text-zinc-200 shadow-xs whitespace-nowrap">
+                      {sc.key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: LOCAL STORAGE & BACKUP */}
           {activeTab === 'storage' && (
             <div className="space-y-4">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   Storage & Data Location
                 </label>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Choose where your notes and attachments are stored on your device.
+                  Local-first storage guarantees full privacy and zero internet dependency.
                 </p>
 
                 <div className="grid grid-cols-2 gap-2.5 mb-4">
@@ -700,7 +1019,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {
                       id: 'browser' as StorageMode,
                       title: 'Browser IndexedDB',
-                      desc: 'Fast, secure, local-first storage inside Chrome.',
+                      desc: 'Fast, secure, local-first storage inside Chrome sandbox.',
                     },
                     {
                       id: 'local_folder' as StorageMode,
@@ -714,14 +1033,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() => updateSetting('storageMode', mode.id)}
                       className={`p-3 rounded-lg border text-left transition flex flex-col justify-between ${
                         localSettings.storageMode === mode.id
-                          ? 'border-amber-600 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 ring-1 ring-amber-600'
+                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-1 ring-blue-600'
                           : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800/40 text-stone-700 dark:text-zinc-300'
                       }`}
                     >
                       <div className="font-semibold text-xs mb-1 flex items-center justify-between">
                         <span>{mode.title}</span>
                         {localSettings.storageMode === mode.id && (
-                          <Check className="w-3.5 h-3.5 text-amber-600" />
+                          <Check className="w-3.5 h-3.5 text-blue-600" />
                         )}
                       </div>
                       <span className="text-[10px] text-stone-400 dark:text-zinc-500 leading-tight">
@@ -733,12 +1052,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Local Folder Directory Picker */}
-              <div className="p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-lg border border-stone-200 dark:border-zinc-800 space-y-3">
+              <div className="p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <FolderOpen className="w-4 h-4 text-amber-600" />
+                    <FolderOpen className="w-4 h-4 text-blue-600" />
                     <span className="font-semibold text-xs text-stone-800 dark:text-zinc-200">
-                      Physical Folder Path
+                      Physical Folder Directory
                     </span>
                   </div>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-stone-200/80 dark:bg-zinc-800 text-stone-600 dark:text-zinc-400">
@@ -749,14 +1068,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed">
-                  When a folder is selected, MemoDock can synchronize your notes as human-readable Markdown files (<code className="text-amber-700 dark:text-amber-400">notes/*.md</code>) and attachments (<code className="text-amber-700 dark:text-amber-400">attachments/</code>) directly into that directory.
+                  When a folder is selected via the File System Access API, MemoDock synchronizes your notes as plain Markdown files (<code className="text-blue-600 dark:text-blue-400">notes/*.md</code>) directly into that disk folder.
                 </p>
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
                     onClick={handlePickLocalFolder}
-                    className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-md text-xs shadow-sm transition flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5"
                   >
                     <Folder className="w-3.5 h-3.5" />
                     <span>Choose Local Folder...</span>
@@ -767,35 +1086,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="button"
                       disabled={isSyncingLocal}
                       onClick={handleSyncToLocalFolder}
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-md text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncingLocal ? 'animate-spin' : ''}`} />
                       <span>{isSyncingLocal ? 'Writing...' : 'Sync Now to Folder'}</span>
                     </button>
                   )}
                 </div>
+              </div>
 
-                {localSettings.localStorageFolder?.lastSyncTimestamp && (
-                  <div className="text-[10px] text-stone-400 dark:text-zinc-500">
-                    Last local sync: {new Date(localSettings.localStorageFolder.lastSyncTimestamp).toLocaleTimeString()}
+              {/* JSON Backup & Restore */}
+              <div className="p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span className="font-semibold text-xs text-stone-800 dark:text-zinc-200">
+                      Full JSON Backup & Restore
+                    </span>
                   </div>
-                )}
+                </div>
+                <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed">
+                  Export or restore all notes, folders, tags, and timestamps as an encrypted, portable JSON archive.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportJsonBackup}
+                    className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg text-xs font-medium shadow-sm transition flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export JSON Backup</span>
+                  </button>
+                  <label className="px-3 py-1.5 bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 hover:bg-stone-50 dark:hover:bg-zinc-700 text-stone-700 dark:text-stone-200 rounded-lg text-xs font-medium shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isRestoringJson ? 'Restoring...' : 'Restore from JSON...'}</span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleRestoreJsonFile}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 6: GOOGLE DRIVE SYNC */}
+          {/* TAB 7: GOOGLE DRIVE SYNC */}
           {activeTab === 'gdrive' && (
             <div className="space-y-4">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   Google Drive Cloud Sync
                 </label>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Backup your encrypted notes library to your Google Drive to sync across multiple computers.
+                  Backup your notes library to your private Google Drive folder to synchronize across computers.
                 </p>
 
-                <div className="p-4 bg-stone-50 dark:bg-zinc-950/60 rounded-lg border border-stone-200 dark:border-zinc-800 space-y-3">
+                <div className="p-4 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Cloud className="w-4 h-4 text-blue-500" />
@@ -834,7 +1183,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           type="button"
                           disabled={isSyncingDrive}
                           onClick={handleConnectDrive}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <Cloud className="w-3.5 h-3.5" />
                           <span>Connect Google Drive</span>
@@ -843,12 +1192,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
 
-                  {/* Optional Custom OAuth Token input */}
                   {showCustomTokenInput && !localSettings.googleDrive.isConnected && (
                     <div className="pt-2 border-t border-stone-200/60 dark:border-zinc-800/60 flex items-center gap-2">
                       <input
                         type="password"
-                        placeholder="Paste Google Drive OAuth Token (optional)"
+                        placeholder="Paste Google Drive OAuth Token"
                         value={customDriveToken}
                         onChange={(e) => setCustomDriveToken(e.target.value)}
                         className="flex-1 bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded px-2.5 py-1 text-xs text-stone-800 dark:text-zinc-200 font-mono"
@@ -876,7 +1224,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               googleDrive: { ...prev.googleDrive, folderName: e.target.value },
                             }))
                           }
-                          className="bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded px-2 py-1 text-xs text-stone-800 dark:text-zinc-200 w-44"
+                          className="bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded px-2 py-1 text-xs text-stone-800 dark:text-zinc-200 w-48"
                         />
                       </div>
 
@@ -902,7 +1250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           type="button"
                           disabled={isSyncingDrive}
                           onClick={handleSyncDriveNow}
-                          className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-md text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                          className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDrive ? 'animate-spin' : ''}`} />
                           <span>{isSyncingDrive ? 'Syncing...' : 'Sync Now'}</span>
@@ -921,11 +1269,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 7: AI ASSISTANT */}
+          {/* TAB 8: AI ASSISTANT */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   AI Model Provider
                 </label>
                 <div className="grid grid-cols-3 gap-2 mt-2">
@@ -940,7 +1288,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() => updateSetting('aiProvider', p.id as any)}
                       className={`py-2 px-3 rounded-lg border text-xs font-medium transition ${
                         localSettings.aiProvider === p.id
-                          ? 'border-amber-600 bg-amber-50/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 font-semibold'
+                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 font-semibold'
                           : 'border-stone-200 dark:border-zinc-800 text-stone-600 dark:text-zinc-400'
                       }`}
                     >
@@ -951,7 +1299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   API Key
                 </label>
                 <div className="relative">
@@ -966,7 +1314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ? 'sk-proj-...'
                         : 'Custom API Key or token'
                     }
-                    className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 pr-8 text-xs font-mono text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 pr-8 text-xs font-mono text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                   <button
                     type="button"
@@ -979,7 +1327,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   Model Identifier
                 </label>
                 <input
@@ -993,7 +1341,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {localSettings.aiProvider === 'custom' && (
                 <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
+                  <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                     Custom Base URL (e.g. Local Ollama)
                   </label>
                   <input
@@ -1017,21 +1365,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Check className="w-3.5 h-3.5" /> Settings saved successfully
               </span>
             ) : (
-              'Changes are saved locally to your browser.'
+              'Changes are saved locally to your device.'
             )}
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 rounded-md transition"
+              className="px-3 py-1.5 text-xs text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg transition"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => handleSave()}
-              className="px-4 py-1.5 text-xs font-medium bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-md shadow-sm transition"
+              className="px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition"
             >
               Save Preferences
             </button>

@@ -4,7 +4,7 @@
 > *Your personal knowledge workspace, right inside your browser.*  
 > *Save ideas. Organize resources. Build your knowledge.*
 
-`(Smart Notes) (Web Clipper) (Resource Library) (PDF Manager) (Local-first)`
+`(Smart Notes) (Web Clipper) (Resource Library) (PDF Manager) (Spreadsheets & Data) (Local-first)`
 
 MemoDock is a modern, lightweight, feature-packed Chrome extension combining distraction-free, paper-like writing with an advanced personal knowledge management suite.
 
@@ -79,7 +79,22 @@ Download `memodock-extension.zip` directly from the releases or the landing page
 - One-click active tab capture or right-click text selection clipping.
 - Filter by collections, search, and export.
 
-### 6. 100% Local-First Privacy & Multi-Device Sync
+### 6. Interactive CSV & Excel Spreadsheets Module
+- **Zero-Dependency Native Parsing**: RFC 4180 CSV parser with automatic delimiter detection and native multi-sheet Excel `.xlsx` decompression using browser `DecompressionStream`.
+- **Full In-Browser Spreadsheet Hub**: Sortable columns, cell editing, add/remove rows and columns, sheet tabs, and CSV export.
+- **Embeddable Inside Notes**: Seamlessly embed any spreadsheet workbook inside notes with live editable preview tables or compact card badges.
+
+### 7. Curated Workspace Profiles & Personalization
+- **1-Click Profile Presets**:
+  - **Study & Courses**: Soft gray theme, Inter sans-serif typography, balanced layout with right-hand outline.
+  - **Engineering & Code**: Dark midnight theme, Monospace font, wide editor canvas, full toolset.
+  - **Academic Research**: Warm sepia paper theme, Serif typography, pinned outline, KaTeX mathematical equations.
+  - **Distraction-Free Writing**: Pure paper canvas, minimal sidebar, hidden chrome, maximum focus.
+  - **Balanced Daily**: Default daily driver layout.
+- **Custom Accent Colors & Visual Themes**: 6 calibrated themes (Clean White, Warm Sepia, Cool Frost, Soft Gray, Midnight Navy, Deep AMOLED) and custom hex accent palette.
+- **Draggable Sidebar & Synchronized Outline**: Smooth edge-resizer (200px–450px) and real-time scroll-synchronized Table of Contents.
+
+### 8. 100% Local-First Privacy & Multi-Device Sync
 - Data is stored strictly on your machine in IndexedDB.
 - Optional Google Drive cloud backup with conflict resolution.
 - Optional file system directory sync as readable Markdown (`notes/*.md`).
@@ -106,14 +121,16 @@ MemoDock includes an extensive test suite verifying:
 - Background Service Worker registration
 - HTML container dimensions (enforcing 760×580 popup constraint)
 - LaTeX mathematics recognition and currency protection
-- TSV spreadsheet conversion and Markdown escape normalizer
+- TSV and CSV RFC 4180 parsing and round-trip export
 - French educational content regression parsing
+- Table of Contents heading hierarchy extraction (H1–H4)
+- Workspace Profiles and Keyboard Shortcuts definitions
 
 Run tests anytime:
 ```bash
 npm test
 ```
-All 74/74 tests pass with 0 errors.
+All 91/91 tests pass with 0 errors.
 
 ---
 

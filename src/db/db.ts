@@ -10,6 +10,8 @@ import {
   AppSettings,
   Resource,
   ResourceCollection,
+  Spreadsheet,
+  WorkspaceProfile,
 } from './types';
 
 export class NotebookDB extends Dexie {
@@ -22,6 +24,7 @@ export class NotebookDB extends Dexie {
   conflicts!: Table<ConflictRecord, string>;
   resources!: Table<Resource, string>;
   collections!: Table<ResourceCollection, string>;
+  spreadsheets!: Table<Spreadsheet, string>;
 
   constructor() {
     super('NotebookDB');
@@ -54,14 +57,123 @@ export class NotebookDB extends Dexie {
       resources: 'id, url, title, domain, type, collection, *tags, isPinned, isFavorite, isArchived, isTrash, createdAt, lastOpenedAt',
       collections: 'id, name, createdAt',
     });
+
+    // Version 4: Spreadsheets Module (CSV / XLSX)
+    this.version(4).stores({
+      notes: 'id, title, createdAt, updatedAt, folderId, *tags, isPinned, isFavorite, isArchived, isTrash, *internalLinks, *backlinks',
+      folders: 'id, name, createdAt, updatedAt',
+      tags: 'id, &name',
+      attachments: 'id, noteId, name, type, createdAt',
+      noteVersions: 'id, noteId, createdAt',
+      templates: 'id, title, category, isBuiltin',
+      conflicts: 'id, noteId, detectedAt, resolved',
+      resources: 'id, url, title, domain, type, collection, *tags, isPinned, isFavorite, isArchived, isTrash, createdAt, lastOpenedAt',
+      collections: 'id, name, createdAt',
+      spreadsheets: 'id, title, collection, *tags, noteId, isPinned, isFavorite, isArchived, isTrash, createdAt, updatedAt',
+    });
   }
 }
 
 export const db = new NotebookDB();
 
-// Default settings for NoteBook V2
+export const DEFAULT_PROFILES: WorkspaceProfile[] = [
+  {
+    id: 'prof-balanced',
+    name: 'Balanced Workspace',
+    type: 'custom',
+    description: 'Recommended daily driver with clean sidebar, essential tools and optional outline',
+    theme: 'system',
+    themePreset: 'default-light',
+    accentColor: '#2563eb',
+    layoutMode: 'balanced',
+    sidebarVisible: true,
+    sidebarMode: 'full',
+    sidebarWidth: 260,
+    outlineVisible: true,
+    outlinePosition: 'right',
+    editorWidth: 'normal',
+    fontFamily: 'sans',
+    fontSize: 'md',
+  },
+  {
+    id: 'prof-study',
+    name: 'Study & Courses',
+    type: 'study',
+    description: 'Optimized for lectures, course summaries, PDF readings and quick revision',
+    theme: 'light',
+    themePreset: 'soft-gray',
+    accentColor: '#3b82f6',
+    layoutMode: 'balanced',
+    sidebarVisible: true,
+    sidebarMode: 'full',
+    sidebarWidth: 270,
+    outlineVisible: true,
+    outlinePosition: 'right',
+    editorWidth: 'normal',
+    fontFamily: 'sans',
+    fontSize: 'md',
+  },
+  {
+    id: 'prof-dev',
+    name: 'Engineering & Code',
+    type: 'development',
+    description: 'Monospace typography, dark high-contrast theme, wide code canvas and full tools',
+    theme: 'dark',
+    themePreset: 'midnight-dark',
+    accentColor: '#10b981',
+    layoutMode: 'complete',
+    sidebarVisible: true,
+    sidebarMode: 'compact',
+    sidebarWidth: 250,
+    outlineVisible: true,
+    outlinePosition: 'right',
+    editorWidth: 'wide',
+    fontFamily: 'mono',
+    fontSize: 'sm',
+  },
+  {
+    id: 'prof-research',
+    name: 'Academic Research',
+    type: 'research',
+    description: 'Serif reading typography, warm background, KaTeX formulas and pinned outline',
+    theme: 'light',
+    themePreset: 'warm-light',
+    accentColor: '#d97706',
+    layoutMode: 'balanced',
+    sidebarVisible: true,
+    sidebarMode: 'full',
+    sidebarWidth: 280,
+    outlineVisible: true,
+    outlinePosition: 'right',
+    editorWidth: 'normal',
+    fontFamily: 'serif',
+    fontSize: 'md',
+  },
+  {
+    id: 'prof-writing',
+    name: 'Distraction-Free Writing',
+    type: 'writing',
+    description: 'Pure paper canvas, minimal sidebar, hidden panels, maximum focus',
+    theme: 'light',
+    themePreset: 'default-light',
+    accentColor: '#4f46e5',
+    layoutMode: 'minimal',
+    sidebarVisible: false,
+    sidebarMode: 'compact',
+    sidebarWidth: 240,
+    outlineVisible: false,
+    outlinePosition: 'right',
+    editorWidth: 'narrow',
+    fontFamily: 'serif',
+    fontSize: 'lg',
+  },
+];
+
+// Default settings for MemoDock V3
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
+  themePreset: 'default-light',
+  accentColor: '#2563eb',
   editorWidth: 'normal',
   fontFamily: 'sans',
   fontSize: 'md',
@@ -75,6 +187,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   // Note List Display Settings
   noteListMode: 'detailed',
+  sidebarWidth: 260,
+  outlinePosition: 'right',
+  outlineWidth: 256,
+  activeProfileId: 'prof-balanced',
+  workspaceProfiles: DEFAULT_PROFILES,
 
   // Sidebar Visibility Settings
   sidebarVisibility: {

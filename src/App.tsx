@@ -24,6 +24,7 @@ import { StatusBar } from './components/layout/StatusBar';
 import { TipTapEditor } from './components/editor/TipTapEditor';
 import { ResourceGrid } from './components/resources/ResourceGrid';
 import { DocumentHub } from './components/pdf/DocumentHub';
+import { SpreadsheetHub } from './components/spreadsheet/SpreadsheetHub';
 
 import { SettingsModal } from './components/modals/SettingsModal';
 import { AIAssistantModal } from './components/modals/AIAssistantModal';
@@ -219,16 +220,19 @@ export const App: React.FC = () => {
     setSettings(updated);
   };
 
-  const handleToggleEditorMode = async (mode: 'minimal' | 'standard') => {
+  const handleSelectLayoutPreset = async (preset: 'minimal' | 'balanced' | 'complete') => {
+    const isMin = preset === 'minimal';
+    const isComp = preset === 'complete';
     const updated = await settingsStorage.set({
       editorLayout: {
         ...settings.editorLayout,
-        mode,
-        showToolbar: mode === 'standard',
-        showBreadcrumbs: mode === 'standard',
-        showTableOfContents: mode === 'standard',
+        mode: preset,
+        showToolbar: !isMin,
+        showBreadcrumbs: !isMin,
+        showTableOfContents: isComp || preset === 'balanced',
+        showModifiedDate: isComp,
       },
-      noteListMode: mode === 'minimal' ? 'minimal' : 'detailed',
+      noteListMode: isMin ? 'minimal' : 'detailed',
     });
     setSettings(updated);
   };
@@ -239,6 +243,15 @@ export const App: React.FC = () => {
 
   const handleToggleFavorite = async (id: string, current: boolean) => {
     await updateNote(id, { isFavorite: !current });
+  };
+
+  const handleMoveNoteToFolder = async (noteId: string, folderId: string | null) => {
+    await updateNote(noteId, { folderId });
+  };
+
+  const handleResizeSidebar = async (newWidth: number) => {
+    const updated = await settingsStorage.set({ sidebarWidth: newWidth });
+    setSettings(updated);
   };
 
   const isPopup = typeof window !== 'undefined' && (
@@ -261,13 +274,12 @@ export const App: React.FC = () => {
         onOpenExport={() => setIsExportOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
-        onOpenImport={() => setIsGlobalImportOpen(true)}
         focusMode={focusMode}
         onToggleFocusMode={() => setFocusMode(!focusMode)}
         theme={theme}
         onCycleTheme={cycleTheme}
-        editorMode={settings.editorLayout?.mode === 'minimal' ? 'minimal' : 'standard'}
-        onToggleEditorMode={handleToggleEditorMode}
+        layoutPreset={settings.editorLayout?.mode || 'balanced'}
+        onSelectLayoutPreset={handleSelectLayoutPreset}
       />
 
       {/* Main Workspace Body */}
@@ -280,6 +292,13 @@ export const App: React.FC = () => {
             setWorkspaceView('notes');
           }}
         />
+      ) : workspaceView === 'spreadsheets' ? (
+        <SpreadsheetHub
+          onNavigateToNote={(targetId) => {
+            setActiveNoteId(targetId);
+            setWorkspaceView('notes');
+          }}
+        />
       ) : (
         <>
           {/* Main Workspace: Left Sidebar + Center Editor Canvas */}
@@ -287,6 +306,7 @@ export const App: React.FC = () => {
         {/* Sidebar */}
         <Sidebar
           isOpen={isSidebarOpen && !focusMode}
+          workspaceView={workspaceView}
           notes={notes}
           folders={folders}
           tags={tags}
@@ -310,6 +330,7 @@ export const App: React.FC = () => {
           onCreateTag={createTag}
           onDeleteTag={deleteTag}
           onEmptyTrash={emptyTrash}
+          onMoveNoteToFolder={handleMoveNoteToFolder}
           sortField={sortField}
           sortOrder={sortOrder}
           onChangeSort={(f, o) => {
@@ -318,6 +339,8 @@ export const App: React.FC = () => {
           }}
           noteListMode={settings.noteListMode}
           sidebarVisibility={settings.sidebarVisibility}
+          sidebarWidth={settings.sidebarWidth || 260}
+          onResizeSidebar={handleResizeSidebar}
           isMinimalistMode={settings.editorLayout?.mode === 'minimal' || settings.noteListMode === 'minimal'}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />

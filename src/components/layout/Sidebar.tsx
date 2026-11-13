@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileText,
   Star,
@@ -17,8 +17,11 @@ import {
   Hash,
   X,
   Check,
-  MessageSquareHeart,
   PanelLeftClose,
+  Bookmark,
+  Files,
+  FileSpreadsheet,
+  GripVertical,
 } from 'lucide-react';
 import {
   Note,
@@ -29,10 +32,13 @@ import {
   SortOrder,
   NoteListDisplayMode,
   SidebarVisibility,
+  WorkspaceView,
+  ResourceCollection,
 } from '../../db/types';
 
 interface SidebarProps {
   isOpen: boolean;
+  workspaceView: WorkspaceView;
   notes: Note[];
   folders: Folder[];
   tags: Tag[];
@@ -59,18 +65,35 @@ interface SidebarProps {
   onCreateTag: (name: string, color?: string) => Promise<Tag>;
   onDeleteTag: (id: string, name: string) => Promise<void>;
   onEmptyTrash: () => Promise<void>;
+  onMoveNoteToFolder?: (noteId: string, folderId: string | null) => Promise<void>;
   sortField: SortField;
   sortOrder: SortOrder;
   onChangeSort: (field: SortField, order: SortOrder) => void;
   noteListMode?: NoteListDisplayMode;
   sidebarVisibility?: SidebarVisibility;
+  sidebarWidth?: number;
+  onResizeSidebar?: (newWidth: number) => void;
   onToggleSection?: (section: 'folders' | 'tags') => void;
   isMinimalistMode?: boolean;
   onToggleSidebar?: () => void;
+
+  // Contextual Collections
+  resourceCollections?: string[];
+  selectedResourceCollection?: string;
+  onSelectResourceCollection?: (col: string) => void;
+
+  pdfCollections?: string[];
+  selectedPdfCollection?: string;
+  onSelectPdfCollection?: (col: string) => void;
+
+  spreadsheetCollections?: string[];
+  selectedSpreadsheetCollection?: string;
+  onSelectSpreadsheetCollection?: (col: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
+  workspaceView = 'notes',
   notes,
   folders,
   tags,
@@ -91,6 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateTag,
   onDeleteTag,
   onEmptyTrash,
+  onMoveNoteToFolder,
   sortField,
   sortOrder,
   onChangeSort,
@@ -107,15 +131,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
     tagsExpanded: true,
     mode: 'full',
   },
+  sidebarWidth = 260,
+  onResizeSidebar,
   onToggleSection,
   isMinimalistMode = false,
   onToggleSidebar,
+  resourceCollections = ['AI & Research', 'Documentation', 'Tools & Libs', 'Design & UI', 'Articles'],
+  selectedResourceCollection = 'all',
+  onSelectResourceCollection,
+  pdfCollections = ['Course Materials', 'Research Papers', 'Cheatsheets', 'Documentation'],
+  selectedPdfCollection = 'all',
+  onSelectPdfCollection,
+  spreadsheetCollections = ['Data Science', 'Financial', 'Inventories', 'Research'],
+  selectedSpreadsheetCollection = 'all',
+  onSelectSpreadsheetCollection,
 }) => {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
+
+  // Drag and drop state
+  const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+
+  // Resizing state
+  const [currentWidth, setCurrentWidth] = useState<number>(sidebarWidth);
+  const isResizingRef = useRef(false);
+
+  useEffect(() => {
+    setCurrentWidth(sidebarWidth);
+  }, [sidebarWidth]);
+
+  // Handle Drag to Resize Sidebar
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const newWidth = Math.min(Math.max(moveEvent.clientX, 200), 450);
+      setCurrentWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizingRef.current) {
+        isResizingRef.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        if (onResizeSidebar) {
+          onResizeSidebar(currentWidth);
+        }
+      }
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Local collapsible state if not controlled
   const [foldersOpen, setFoldersOpen] = useState(sidebarVisibility.foldersExpanded ?? true);
@@ -153,29 +230,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filterBtnClass = (active: boolean) =>
     `w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition ${
       active
-        ? 'bg-stone-200/90 dark:bg-zinc-800 text-stone-900 dark:text-stone-100 font-medium'
+        ? 'bg-blue-100/70 dark:bg-zinc-800 text-blue-900 dark:text-stone-100 font-semibold shadow-2xs'
         : 'text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-900 hover:text-stone-900 dark:hover:text-stone-200'
     }`;
 
-  // Width depending on sidebar mode
-  const widthClass =
-    sidebarVisibility.mode === 'icons'
-      ? 'w-14 items-center'
-      : sidebarVisibility.mode === 'compact'
-      ? 'w-52 sm:w-60'
-      : 'w-64 sm:w-72';
-
-  // Minimalist Mode Sidebar matching reference screenshot media_1794476572201_959d8bbd.png
+  // Minimalist Mode Sidebar (TabNotebook Style)
   if (isMinimalistMode || noteListMode === 'minimal') {
     return (
-      <aside className="w-56 sm:w-64 flex-shrink-0 border-r border-stone-200/80 dark:border-zinc-800/80 bg-stone-50/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col h-full select-none text-xs">
-        {/* Minimalist Top Header: [+ New note] and [<|] collapse icon */}
+      <aside
+        style={{ width: `${currentWidth}px` }}
+        className="relative flex-shrink-0 border-r border-stone-200/80 dark:border-zinc-800/80 bg-stone-50/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col h-full select-none text-xs"
+      >
+        {/* Minimalist Top Header */}
         <div className="p-3 border-b border-stone-200/60 dark:border-zinc-800/60 flex items-center justify-between">
           <button
             type="button"
             onClick={onCreateNote}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 rounded-lg transition"
-            title="Create New Note"
+            title="Create New Note (Ctrl+N)"
           >
             <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span>New note</span>
@@ -192,7 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Minimalist Notes List: Pure Titles with Blue Left Border for Active Note */}
+        {/* Minimalist Notes List */}
         <div className="flex-1 overflow-y-auto py-1">
           {notes.length === 0 ? (
             <div className="p-6 text-center text-stone-400 dark:text-zinc-600 text-xs">
@@ -212,7 +284,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }`}
                 >
                   <span className="truncate block flex-1">{note.title || 'Untitled Note'}</span>
-                  {/* Subtle menu trigger on hover */}
                   <button
                     type="button"
                     onClick={(e) => {
@@ -223,631 +294,376 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <MoreVertical className="w-3 h-3" />
                   </button>
-
-                  {/* Context Menu Dropdown */}
-                  {activeMenuNoteId === note.id && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-30"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuNoteId(null);
-                        }}
-                      />
-                      <div className="absolute right-3 top-7 z-40 w-36 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg shadow-float py-1 text-xs">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDuplicateNote(note);
-                            setActiveMenuNoteId(null);
-                          }}
-                          className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Duplicate</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onTogglePin(note.id, note.isPinned);
-                            setActiveMenuNoteId(null);
-                          }}
-                          className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2"
-                        >
-                          <Pin className="w-3.5 h-3.5" />
-                          <span>{note.isPinned ? 'Unpin' : 'Pin'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteNote(note.id);
-                            setActiveMenuNoteId(null);
-                          }}
-                          className="w-full text-left px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 flex items-center gap-2"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
                 </div>
               );
             })
           )}
         </div>
-      </aside>
-    );
-  }
 
-  // If in Icons-only mode: render clean rail
-  if (sidebarVisibility.mode === 'icons') {
-    return (
-      <aside className="w-14 flex-shrink-0 border-r border-stone-200/80 dark:border-zinc-800/80 bg-stone-50/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col items-center py-3 space-y-3 select-none text-xs">
-        <button
-          type="button"
-          onClick={() => onSelectFilter({ type: 'all' })}
-          className={`p-2 rounded-lg transition ${isFilterActive({ type: 'all' }) ? 'bg-stone-200 dark:bg-zinc-800 text-stone-900 dark:text-stone-100' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-900'}`}
-          title="All Notes"
+        {/* Right Resizer Handle */}
+        <div
+          onMouseDown={startResizing}
+          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition z-20 group"
         >
-          <FileText className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectFilter({ type: 'favorites' })}
-          className={`p-2 rounded-lg transition ${isFilterActive({ type: 'favorites' }) ? 'bg-stone-200 dark:bg-zinc-800 text-amber-500' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-900'}`}
-          title="Favorites"
-        >
-          <Star className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectFilter({ type: 'recents' })}
-          className={`p-2 rounded-lg transition ${isFilterActive({ type: 'recents' }) ? 'bg-stone-200 dark:bg-zinc-800 text-blue-500' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-900'}`}
-          title="Recent"
-        >
-          <Clock className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectFilter({ type: 'archived' })}
-          className={`p-2 rounded-lg transition ${isFilterActive({ type: 'archived' }) ? 'bg-stone-200 dark:bg-zinc-800 text-purple-500' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-900'}`}
-          title="Archived"
-        >
-          <Archive className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectFilter({ type: 'trash' })}
-          className={`p-2 rounded-lg transition ${isFilterActive({ type: 'trash' }) ? 'bg-stone-200 dark:bg-zinc-800 text-red-500' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-900'}`}
-          title="Trash"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+          <div className="w-[1px] h-full bg-stone-200 dark:bg-zinc-800 mx-auto group-hover:bg-blue-500" />
+        </div>
       </aside>
     );
   }
 
   return (
-    <aside className={`${widthClass} flex-shrink-0 border-r border-stone-200/80 dark:border-zinc-800/80 bg-stone-50/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col h-full select-none text-xs`}>
-      {/* Top Filter Views Header */}
-      <div className="p-3 border-b border-stone-200/60 dark:border-zinc-800/60 space-y-1">
-        {sidebarVisibility.showAll && (
-          <button
-            type="button"
-            onClick={() => onSelectFilter({ type: 'all' })}
-            className={filterBtnClass(isFilterActive({ type: 'all' }))}
-          >
-            <span className="flex items-center gap-2">
-              <FileText className="w-3.5 h-3.5 text-stone-500" />
-              <span>All Notes</span>
-            </span>
-            <span className="text-[11px] text-stone-400">{counts.all}</span>
-          </button>
-        )}
-
-        {sidebarVisibility.showFavorites && (
-          <button
-            type="button"
-            onClick={() => onSelectFilter({ type: 'favorites' })}
-            className={filterBtnClass(isFilterActive({ type: 'favorites' }))}
-          >
-            <span className="flex items-center gap-2">
-              <Star className="w-3.5 h-3.5 text-amber-500" />
-              <span>Favorites</span>
-            </span>
-            <span className="text-[11px] text-stone-400">{counts.favorites}</span>
-          </button>
-        )}
-
-        {sidebarVisibility.showRecents && (
-          <button
-            type="button"
-            onClick={() => onSelectFilter({ type: 'recents' })}
-            className={filterBtnClass(isFilterActive({ type: 'recents' }))}
-          >
-            <span className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-blue-500" />
-              <span>Recent</span>
-            </span>
-            <span className="text-[11px] text-stone-400">{counts.recents}</span>
-          </button>
-        )}
-
-        {sidebarVisibility.showArchived && (
-          <button
-            type="button"
-            onClick={() => onSelectFilter({ type: 'archived' })}
-            className={filterBtnClass(isFilterActive({ type: 'archived' }))}
-          >
-            <span className="flex items-center gap-2">
-              <Archive className="w-3.5 h-3.5 text-purple-500" />
-              <span>Archived</span>
-            </span>
-            <span className="text-[11px] text-stone-400">{counts.archived}</span>
-          </button>
-        )}
-
-        {sidebarVisibility.showTrash && (
-          <button
-            type="button"
-            onClick={() => onSelectFilter({ type: 'trash' })}
-            className={filterBtnClass(isFilterActive({ type: 'trash' }))}
-          >
-            <span className="flex items-center gap-2">
-              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-              <span>Trash</span>
-            </span>
-            <span className="text-[11px] text-stone-400">{counts.trash}</span>
-          </button>
-        )}
-      </div>
-
-      {/* Folders & Tags collapsible sections */}
-      <div className="p-3 border-b border-stone-200/60 dark:border-zinc-800/60 space-y-3 max-h-48 overflow-y-auto">
-        
-        {/* Folders Section */}
-        {sidebarVisibility.showFolders && (
-          <div>
-            <div className="flex items-center justify-between text-[11px] font-semibold text-stone-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setFoldersOpen(!foldersOpen);
-                  if (onToggleSection) onToggleSection('folders');
-                }}
-                className="flex items-center gap-1 hover:text-stone-700 dark:hover:text-zinc-300"
-              >
-                {foldersOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                <span>Folders</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCreatingFolder(true)}
-                className="p-0.5 hover:text-stone-700 dark:hover:text-zinc-300 rounded"
-                title="Create Folder"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-
-            {isCreatingFolder && (
-              <div className="flex items-center gap-1 my-1">
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleAddFolder();
-                    if (e.key === 'Escape') setIsCreatingFolder(false);
-                  }}
-                  placeholder="Folder name..."
-                  className="w-full px-2 py-0.5 bg-white dark:bg-zinc-900 border border-stone-300 dark:border-zinc-700 rounded text-xs text-stone-900 dark:text-stone-100"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleAddFolder}
-                  className="p-1 text-green-600 hover:bg-stone-200 dark:hover:bg-zinc-800 rounded"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingFolder(false)}
-                  className="p-1 text-red-500 hover:bg-stone-200 dark:hover:bg-zinc-800 rounded"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {foldersOpen && (
-              <div className="space-y-0.5">
-                {folders.map((folder) => {
-                  const active = isFilterActive({ type: 'folder', folderId: folder.id });
-                  return (
-                    <div
-                      key={folder.id}
-                      className={`group flex items-center justify-between px-2 py-1 rounded text-xs transition ${
-                        active
-                          ? 'bg-stone-200/90 dark:bg-zinc-800 text-stone-900 dark:text-stone-100 font-medium'
-                          : 'text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-900'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onSelectFilter({ type: 'folder', folderId: folder.id })}
-                        className="flex items-center gap-1.5 flex-1 truncate text-left"
-                      >
-                        <FolderIcon
-                          className="w-3.5 h-3.5 flex-shrink-0"
-                          style={{ color: folder.color || '#d97706' }}
-                        />
-                        <span className="truncate">{folder.name}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteFolder(folder.id)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-400 hover:text-red-500 transition"
-                        title="Delete Folder"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tags Section */}
-        {sidebarVisibility.showTags && (
-          <div>
-            <div className="flex items-center justify-between text-[11px] font-semibold text-stone-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setTagsOpen(!tagsOpen);
-                  if (onToggleSection) onToggleSection('tags');
-                }}
-                className="flex items-center gap-1 hover:text-stone-700 dark:hover:text-zinc-300"
-              >
-                {tagsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                <span>Tags</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCreatingTag(true)}
-                className="p-0.5 hover:text-stone-700 dark:hover:text-zinc-300 rounded"
-                title="Create Tag"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-
-            {isCreatingTag && (
-              <div className="flex items-center gap-1 my-1">
-                <input
-                  type="text"
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleAddTag();
-                    if (e.key === 'Escape') setIsCreatingTag(false);
-                  }}
-                  placeholder="Tag name..."
-                  className="w-full px-2 py-0.5 bg-white dark:bg-zinc-900 border border-stone-300 dark:border-zinc-700 rounded text-xs text-stone-900 dark:text-stone-100"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleAddTag}
-                  className="p-1 text-green-600 hover:bg-stone-200 dark:hover:bg-zinc-800 rounded"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingTag(false)}
-                  className="p-1 text-red-500 hover:bg-stone-200 dark:hover:bg-zinc-800 rounded"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {tagsOpen && (
-              <div className="flex items-center flex-wrap gap-1">
-                {tags.map((tag) => {
-                  const active = isFilterActive({ type: 'tag', tag: tag.name });
-                  return (
-                    <span
-                      key={tag.id}
-                      className={`group inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] transition ${
-                        active
-                          ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-medium'
-                          : 'bg-stone-200/60 dark:bg-zinc-800 text-stone-600 dark:text-zinc-400 hover:bg-stone-200 dark:hover:bg-zinc-700'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onSelectFilter({ type: 'tag', tag: tag.name })}
-                        className="flex items-center gap-1"
-                      >
-                        <Hash className="w-2.5 h-2.5 opacity-60" />
-                        <span>{tag.name}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteTag(tag.id, tag.name)}
-                        className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition"
-                        title="Delete Tag"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Sort & Notes List Controls Header */}
-      <div className="px-3 py-2 border-b border-stone-200/50 dark:border-zinc-800/50 flex items-center justify-between text-xs text-stone-500 dark:text-zinc-400">
-        <span className="font-medium text-[11px] uppercase tracking-wider text-stone-400">
-          Notes ({notes.length})
+    <aside
+      style={{ width: `${currentWidth}px` }}
+      className="relative flex-shrink-0 border-r border-stone-200/80 dark:border-zinc-800/80 bg-stone-50/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col h-full select-none text-xs"
+    >
+      {/* MODULE HEADER BAR */}
+      <div className="p-3 border-b border-stone-200/60 dark:border-zinc-800/60 flex items-center justify-between">
+        <span className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-zinc-400 flex items-center gap-1.5">
+          {workspaceView === 'notes' && <FileText className="w-3.5 h-3.5 text-blue-600" />}
+          {workspaceView === 'resources' && <Bookmark className="w-3.5 h-3.5 text-amber-600" />}
+          {workspaceView === 'documents' && <Files className="w-3.5 h-3.5 text-red-500" />}
+          {workspaceView === 'spreadsheets' && <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />}
+          <span className="capitalize">{workspaceView}</span>
         </span>
 
-        {/* Empty Trash Button if viewing trash */}
-        {currentFilter.type === 'trash' && notes.length > 0 && (
+        {onToggleSidebar && (
           <button
             type="button"
-            onClick={onEmptyTrash}
-            className="px-2 py-0.5 rounded text-[11px] bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 transition"
+            onClick={onToggleSidebar}
+            className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 rounded-md transition"
+            title="Collapse sidebar"
           >
-            Empty Trash
+            <PanelLeftClose className="w-4 h-4" />
           </button>
         )}
-
-        {/* Sort dropdown */}
-        <div className="flex items-center gap-1">
-          <select
-            value={`${sortField}-${sortOrder}`}
-            onChange={(e) => {
-              const [f, o] = e.target.value.split('-') as [SortField, SortOrder];
-              onChangeSort(f, o);
-            }}
-            className="bg-transparent text-[11px] text-stone-500 dark:text-zinc-400 focus:outline-none cursor-pointer"
-          >
-            <option value="updatedAt-desc">Latest</option>
-            <option value="createdAt-desc">Newest</option>
-            <option value="title-asc">Title</option>
-          </select>
-        </div>
       </div>
 
-      {/* Note Cards List (Detailed, Compact, or Minimalist Mode) */}
-      <div className="flex-1 overflow-y-auto divide-y divide-stone-200/40 dark:divide-zinc-800/40">
-        {notes.length === 0 ? (
-          <div className="p-6 text-center text-stone-400 dark:text-zinc-600 text-xs space-y-2">
-            <p>No notes found in this view.</p>
-            {currentFilter.type !== 'trash' && (
+      {/* CONTEXTUAL MODULE CONTENT */}
+      {workspaceView === 'notes' ? (
+        /* NOTES MODULE NAVIGATION */
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Quick Filters */}
+          <div className="p-2 space-y-0.5 border-b border-stone-200/50 dark:border-zinc-800/50 flex-shrink-0">
+            {sidebarVisibility.showAll && (
               <button
                 type="button"
-                onClick={onCreateNote}
-                className="px-3 py-1 bg-stone-200/70 hover:bg-stone-300/70 dark:bg-zinc-800 dark:hover:bg-zinc-700 rounded text-stone-800 dark:text-zinc-200 text-xs transition"
+                onClick={() => onSelectFilter({ type: 'all' })}
+                className={filterBtnClass(isFilterActive({ type: 'all' }))}
               >
-                Create note
+                <span className="flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 opacity-70" />
+                  <span>All Notes</span>
+                </span>
+                <span className="text-[10px] opacity-60 font-mono">{counts.all}</span>
+              </button>
+            )}
+
+            {sidebarVisibility.showFavorites && (
+              <button
+                type="button"
+                onClick={() => onSelectFilter({ type: 'favorites' })}
+                className={filterBtnClass(isFilterActive({ type: 'favorites' }))}
+              >
+                <span className="flex items-center gap-2">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
+                  <span>Favorites</span>
+                </span>
+                <span className="text-[10px] opacity-60 font-mono">{counts.favorites}</span>
+              </button>
+            )}
+
+            {sidebarVisibility.showRecents && (
+              <button
+                type="button"
+                onClick={() => onSelectFilter({ type: 'recents' })}
+                className={filterBtnClass(isFilterActive({ type: 'recents' }))}
+              >
+                <span className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Recent</span>
+                </span>
+                <span className="text-[10px] opacity-60 font-mono">{counts.recents}</span>
+              </button>
+            )}
+
+            {sidebarVisibility.showArchived && (
+              <button
+                type="button"
+                onClick={() => onSelectFilter({ type: 'archived' })}
+                className={filterBtnClass(isFilterActive({ type: 'archived' }))}
+              >
+                <span className="flex items-center gap-2">
+                  <Archive className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Archived</span>
+                </span>
+                <span className="text-[10px] opacity-60 font-mono">{counts.archived}</span>
+              </button>
+            )}
+
+            {sidebarVisibility.showTrash && (
+              <button
+                type="button"
+                onClick={() => onSelectFilter({ type: 'trash' })}
+                className={filterBtnClass(isFilterActive({ type: 'trash' }))}
+              >
+                <span className="flex items-center gap-2">
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  <span>Trash</span>
+                </span>
+                <span className="text-[10px] opacity-60 font-mono">{counts.trash}</span>
               </button>
             )}
           </div>
-        ) : (
-          notes.map((note) => {
-            const isActive = note.id === activeNoteId;
-            const snippet = note.plainText
-              ? note.plainText.slice(0, 80).replace(/\s+/g, ' ')
-              : 'Empty note...';
 
-            return (
-              <div
-                key={note.id}
-                onClick={() => onSelectNote(note)}
-                className={`relative group cursor-pointer transition ${
-                  isActive
-                    ? 'bg-white dark:bg-zinc-900 shadow-sm border-l-2 border-stone-800 dark:border-stone-100'
-                    : 'hover:bg-stone-100/70 dark:hover:bg-zinc-900/60'
-                } ${noteListMode === 'compact' ? 'p-2.5' : 'p-3'}`}
-              >
-                {/* Note title line */}
-                <div className="flex items-center justify-between gap-1">
-                  <h4
-                    className={`font-medium text-xs truncate flex-1 ${
-                      isActive
-                        ? 'text-stone-900 dark:text-stone-100 font-semibold'
-                        : 'text-stone-700 dark:text-zinc-300'
-                    }`}
-                  >
-                    {note.title || 'Untitled Note'}
-                  </h4>
-
-                  {/* Indicators / Badges */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {note.isPinned && (
-                      <Pin className="w-3 h-3 text-amber-600 dark:text-amber-500" />
-                    )}
-                    {note.isFavorite && (
-                      <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                    )}
-
-                    {/* Context menu trigger */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenuNoteId(
-                          activeMenuNoteId === note.id ? null : note.id
-                        );
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 rounded transition"
-                    >
-                      <MoreVertical className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Detailed Mode: Snippet & Metadata */}
-                {noteListMode === 'detailed' && (
-                  <>
-                    <p className="text-[11px] text-stone-500 dark:text-zinc-400 line-clamp-2 leading-relaxed my-1">
-                      {snippet}
-                    </p>
-                    <div className="flex items-center justify-between text-[10px] text-stone-400 dark:text-zinc-500">
-                      <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
-                      {note.tags && note.tags.length > 0 && (
-                        <div className="flex items-center gap-1 truncate max-w-[120px]">
-                          {note.tags.slice(0, 2).map((t) => (
-                            <span
-                              key={t}
-                              className="px-1.5 py-0.2 rounded bg-stone-200/50 dark:bg-zinc-800 text-[9px]"
-                            >
-                              #{t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Compact Mode: Date Only */}
-                {noteListMode === 'compact' && (
-                  <div className="text-[10px] text-stone-400 dark:text-zinc-500 mt-0.5">
-                    <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
-                  </div>
-                )}
-
-                {/* Minimalist Mode: No preview, no date, pure title only! */}
-
-                {/* Context Menu Dropdown */}
-                {activeMenuNoteId === note.id && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-30"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenuNoteId(null);
-                      }}
-                    />
-                    <div className="absolute right-3 top-8 z-40 w-36 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg shadow-float py-1 text-xs">
-                      {currentFilter.type === 'trash' ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRestoreNote(note.id);
-                              setActiveMenuNoteId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Restore Note</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPermanentlyDeleteNote(note.id);
-                              setActiveMenuNoteId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 flex items-center gap-2"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Delete Forever</span>
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onTogglePin(note.id, note.isPinned);
-                              setActiveMenuNoteId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2"
-                          >
-                            <Pin className="w-3.5 h-3.5" />
-                            <span>{note.isPinned ? 'Unpin' : 'Pin to top'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleFavorite(note.id, note.isFavorite);
-                              setActiveMenuNoteId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2"
-                          >
-                            <Star className="w-3.5 h-3.5" />
-                            <span>{note.isFavorite ? 'Unfavorite' : 'Favorite'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDuplicateNote(note);
-                              setActiveMenuNoteId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Duplicate</span>
-                          </button>
-                          <div className="h-px bg-stone-200 dark:bg-zinc-800 my-1" />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteNote(note.id);
-                              setActiveMenuNoteId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 flex items-center gap-2"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Move to Trash</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
+          {/* Folders Section (Drop Target for Notes) */}
+          {sidebarVisibility.showFolders && (
+            <div className="p-2 border-b border-stone-200/50 dark:border-zinc-800/50 flex-shrink-0">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-stone-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFoldersOpen(!foldersOpen);
+                    if (onToggleSection) onToggleSection('folders');
+                  }}
+                  className="flex items-center gap-1 hover:text-stone-700 dark:hover:text-zinc-300"
+                >
+                  {foldersOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  <span>Folders</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingFolder(true)}
+                  className="p-0.5 hover:text-stone-700 dark:hover:text-zinc-300 rounded"
+                  title="Create Folder"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
               </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Sidebar Footer with Feedback */}
-      <div className="p-2 border-t border-stone-200/60 dark:border-zinc-800/60 flex items-center justify-between text-[11px] text-stone-400 dark:text-zinc-500 bg-stone-100/40 dark:bg-zinc-950/40 flex-shrink-0">
-        <span>MemoDock V2</span>
-        <a
-          href="https://forms.gle/notebook-feedback-placeholder"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 transition"
-          title="Share Feedback & Suggestions"
-        >
-          <MessageSquareHeart className="w-3 h-3 text-amber-500" />
-          <span>Feedback</span>
-        </a>
+              {isCreatingFolder && (
+                <div className="flex items-center gap-1 my-1">
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddFolder();
+                      if (e.key === 'Escape') setIsCreatingFolder(false);
+                    }}
+                    placeholder="Folder name..."
+                    className="w-full px-2 py-0.5 bg-white dark:bg-zinc-900 border border-stone-300 dark:border-zinc-700 rounded text-xs"
+                    autoFocus
+                  />
+                  <button type="button" onClick={handleAddFolder} className="p-1 text-emerald-600 rounded">
+                    <Check className="w-3 h-3" />
+                  </button>
+                  <button type="button" onClick={() => setIsCreatingFolder(false)} className="p-1 text-red-500 rounded">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              {foldersOpen && (
+                <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                  {folders.map((folder) => {
+                    const active = isFilterActive({ type: 'folder', folderId: folder.id });
+                    const isDragOver = dragOverFolderId === folder.id;
+                    return (
+                      <div
+                        key={folder.id}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverFolderId(folder.id);
+                        }}
+                        onDragLeave={() => setDragOverFolderId(null)}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          setDragOverFolderId(null);
+                          const noteId = e.dataTransfer.getData('text/note-id');
+                          if (noteId && onMoveNoteToFolder) {
+                            await onMoveNoteToFolder(noteId, folder.id);
+                          }
+                        }}
+                        className={`group flex items-center justify-between px-2.5 py-1 rounded-md text-xs transition ${
+                          isDragOver
+                            ? 'ring-2 ring-blue-500 bg-blue-50/70 dark:bg-blue-950/40'
+                            : active
+                            ? 'bg-stone-200 dark:bg-zinc-800 text-stone-900 font-medium'
+                            : 'text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-900'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => onSelectFilter({ type: 'folder', folderId: folder.id })}
+                          className="flex items-center gap-2 truncate flex-1 text-left"
+                        >
+                          <FolderIcon className="w-3 h-3 text-amber-500" />
+                          <span className="truncate">{folder.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteFolder(folder.id)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-red-500 transition"
+                          title="Delete folder"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notes List with Drag & Drop */}
+          <div className="px-3 py-1.5 border-b border-stone-200/50 dark:border-zinc-800/50 flex items-center justify-between text-xs text-stone-400">
+            <span className="font-semibold text-[10px] uppercase tracking-wider">
+              Notes ({notes.length})
+            </span>
+            <div className="flex items-center gap-1">
+              <select
+                value={`${sortField}-${sortOrder}`}
+                onChange={(e) => {
+                  const [f, o] = e.target.value.split('-') as [SortField, SortOrder];
+                  onChangeSort(f, o);
+                }}
+                className="bg-transparent text-[10px] text-stone-500 dark:text-zinc-400 focus:outline-none cursor-pointer"
+              >
+                <option value="updatedAt-desc">Latest</option>
+                <option value="createdAt-desc">Newest</option>
+                <option value="title-asc">Title</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-stone-200/40 dark:divide-zinc-800/40">
+            {notes.map((note) => {
+              const isActive = note.id === activeNoteId;
+              return (
+                <div
+                  key={note.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedNoteId(note.id);
+                    e.dataTransfer.setData('text/note-id', note.id);
+                  }}
+                  onDragEnd={() => setDraggedNoteId(null)}
+                  onClick={() => onSelectNote(note)}
+                  className={`group relative p-2.5 cursor-pointer transition select-none ${
+                    isActive
+                      ? 'bg-white dark:bg-zinc-900 border-l-[3px] border-blue-600 shadow-2xs font-semibold'
+                      : 'hover:bg-stone-100/70 dark:hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <h4 className="font-medium text-xs truncate flex-1 text-stone-900 dark:text-stone-100">
+                      {note.title || 'Untitled Note'}
+                    </h4>
+                    {note.isPinned && <Pin className="w-3 h-3 text-amber-500 flex-shrink-0" />}
+                  </div>
+                  {noteListMode === 'detailed' && note.plainText && (
+                    <p className="text-[11px] text-stone-400 dark:text-zinc-500 line-clamp-1 mt-0.5">
+                      {note.plainText}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : workspaceView === 'resources' ? (
+        /* RESOURCES CONTEXTUAL SIDEBAR */
+        <div className="p-3 space-y-4 flex-1 overflow-y-auto">
+          <div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+              Collections
+            </span>
+            <div className="mt-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => onSelectResourceCollection && onSelectResourceCollection('all')}
+                className={filterBtnClass(selectedResourceCollection === 'all')}
+              >
+                <span>All Resources</span>
+              </button>
+              {resourceCollections.map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  onClick={() => onSelectResourceCollection && onSelectResourceCollection(col)}
+                  className={filterBtnClass(selectedResourceCollection === col)}
+                >
+                  <span>{col}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : workspaceView === 'documents' ? (
+        /* PDF DOCUMENTS CONTEXTUAL SIDEBAR */
+        <div className="p-3 space-y-4 flex-1 overflow-y-auto">
+          <div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+              PDF Categories
+            </span>
+            <div className="mt-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => onSelectPdfCollection && onSelectPdfCollection('all')}
+                className={filterBtnClass(selectedPdfCollection === 'all')}
+              >
+                <span>All Documents</span>
+              </button>
+              {pdfCollections.map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  onClick={() => onSelectPdfCollection && onSelectPdfCollection(col)}
+                  className={filterBtnClass(selectedPdfCollection === col)}
+                >
+                  <span>{col}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* SPREADSHEETS CONTEXTUAL SIDEBAR */
+        <div className="p-3 space-y-4 flex-1 overflow-y-auto">
+          <div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+              Spreadsheet Categories
+            </span>
+            <div className="mt-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => onSelectSpreadsheetCollection && onSelectSpreadsheetCollection('all')}
+                className={filterBtnClass(selectedSpreadsheetCollection === 'all')}
+              >
+                <span>All Spreadsheets</span>
+              </button>
+              {spreadsheetCollections.map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  onClick={() => onSelectSpreadsheetCollection && onSelectSpreadsheetCollection(col)}
+                  className={filterBtnClass(selectedSpreadsheetCollection === col)}
+                >
+                  <span>{col}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RIGHT RESIZER HANDLE */}
+      <div
+        onMouseDown={startResizing}
+        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition z-20 group"
+      >
+        <div className="w-[1px] h-full bg-stone-200 dark:bg-zinc-800 mx-auto group-hover:bg-blue-500" />
       </div>
     </aside>
   );

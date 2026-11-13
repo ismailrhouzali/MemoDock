@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   Bold,
@@ -7,9 +7,7 @@ import {
   Strikethrough,
   Code,
   Highlighter,
-  Heading1,
-  Heading2,
-  Heading3,
+  Heading,
   List,
   ListOrdered,
   CheckSquare,
@@ -31,16 +29,13 @@ import {
   LayoutTemplate,
   History,
   ListTree,
-  ClipboardPaste,
-  ChevronDown,
   Upload,
-  Sparkles,
-  Bookmark,
+  ChevronDown,
+  FileSpreadsheet,
+  MoreHorizontal,
 } from 'lucide-react';
-import { EmojiPicker } from './EmojiPicker';
-import { convertMarkdownToTipTapHtml } from '../../services/clipboardService';
-import { normalizeContent } from '../../services/importEngine/contentNormalizer';
 import { pdfStorageService } from '../../services/pdfStorageService';
+import { spreadsheetService } from '../../services/spreadsheet/spreadsheetService';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -61,24 +56,49 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onOpenHistory,
   onOpenImport,
   onToggleToc,
-  showToc,
+  showToc = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
-  const [showPasteMenu, setShowPasteMenu] = useState(false);
-  const [showMathMenu, setShowMathMenu] = useState(false);
+  const sheetInputRef = useRef<HTMLInputElement>(null);
+
+  const [isHeadingsOpen, setIsHeadingsOpen] = useState(false);
+  const [isTableMenuOpen, setIsTableMenuOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+
+  const headingsRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  // Close menus on outside click
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (headingsRef.current && !headingsRef.current.contains(e.target as Node)) {
+        setIsHeadingsOpen(false);
+      }
+      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+        setIsTableMenuOpen(false);
+      }
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setIsMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
 
   if (!editor) return null;
 
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter URL or note link (e.g. notebook://note/id):', previousUrl);
+    const url = window.prompt('Enter URL or note link:', previousUrl);
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    const cleanUrl = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`;
+    editor.chain().focus().extendMarkRange('link').setLink({ href: cleanUrl }).run();
   };
 
   const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,9 +112,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       };
       reader.readAsDataURL(file);
     }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handlePdfFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +126,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             attachmentId: att.id,
             name: att.name,
             size: att.size,
-            dataUrl: '', // Stored as native Blob in IndexedDB, preventing note bloat
+            dataUrl: '',
             displayMode: 'compact',
           },
         }).run();
@@ -116,113 +134,67 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         console.error('Failed to attach PDF:', err);
       }
     }
-    if (pdfInputRef.current) {
-      pdfInputRef.current.value = '';
-    }
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
   };
 
-  const insertLinkCard = () => {
-    const url = window.prompt('Enter Web URL to insert as Link Card:');
-    if (!url) return;
-    try {
-      const cleanUrl = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`;
-      const parsed = new URL(cleanUrl);
-      const hostname = parsed.hostname;
-      const title = `${hostname}${parsed.pathname.length > 1 ? parsed.pathname : ''}`;
-      editor.chain().focus().insertContent({
-        type: 'linkCard',
-        attrs: {
-          url: cleanUrl,
-          title,
-          hostname,
-          displayMode: 'compact',
-        },
-      }).run();
-    } catch {
-      alert('Please enter a valid URL.');
-    }
-  };
-
-  const addMathEquation = (displayMode: 'block' | 'inline') => {
-    if (displayMode === 'block') {
-      editor.chain().focus().insertContent({
-        type: 'mathBlock',
-        attrs: { latex: 'E = mc^2' },
-      }).run();
-    } else {
-      editor.chain().focus().insertContent({
-        type: 'mathInline',
-        attrs: { latex: '\\bar{Y}' },
-      }).run();
-    }
-    setShowMathMenu(false);
-  };
-
-  const addMermaidDiagram = () => {
-    editor.chain().focus().insertContent({
-      type: 'mermaidBlock',
-      attrs: {
-        code: 'graph TD\n  Start[Start] --> Process[Step 1]\n  Process --> End[Finish]',
-      },
-    }).run();
-  };
-
-  const insertTable = () => {
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-  };
-
-  const insertEmoji = (emoji: string) => {
-    editor.chain().focus().insertContent(emoji).run();
-  };
-
-  const handleExplicitPasteMarkdown = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        const result = convertMarkdownToTipTapHtml(text);
-        editor.chain().focus().insertContent(result.html).run();
+  const handleSpreadsheetFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+        let created;
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          const text = await file.text();
+          created = await spreadsheetService.createFromCsv(nameWithoutExt, text, 'Data Science');
+        } else {
+          const buffer = await file.arrayBuffer();
+          created = await spreadsheetService.createFromXlsx(nameWithoutExt, buffer, 'Data Science');
+        }
+        editor.chain().focus().insertContent({
+          type: 'spreadsheetNode',
+          attrs: {
+            spreadsheetId: created.id,
+            title: created.title,
+            displayMode: 'compact',
+          },
+        }).run();
+      } catch (err) {
+        console.error('Failed to attach spreadsheet:', err);
       }
-    } catch (err) {
-      console.warn('Clipboard read error:', err);
     }
-    setShowPasteMenu(false);
-  };
-
-  const handleExplicitPastePlain = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        editor.chain().focus().insertContent(text).run();
-      }
-    } catch (err) {
-      console.warn('Clipboard read error:', err);
-    }
-    setShowPasteMenu(false);
-  };
-
-  const handleCleanDocumentContent = () => {
-    const rawHtml = editor.getHTML();
-    const cleaned = normalizeContent(rawHtml);
-    editor.commands.setContent(cleaned);
-    setShowPasteMenu(false);
+    if (sheetInputRef.current) sheetInputRef.current.value = '';
   };
 
   const btnClass = (active: boolean) =>
-    `p-1.5 rounded transition ${
+    `p-1.5 rounded-md transition ${
       active
-        ? 'bg-stone-200/90 dark:bg-zinc-800 text-stone-900 dark:text-stone-100 font-semibold'
-        : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800/60'
+        ? 'bg-stone-200 dark:bg-zinc-800 text-stone-900 dark:text-stone-100 font-bold'
+        : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-zinc-900'
     }`;
 
+  const getHeadingLabel = () => {
+    if (editor.isActive('heading', { level: 1 })) return 'H1';
+    if (editor.isActive('heading', { level: 2 })) return 'H2';
+    if (editor.isActive('heading', { level: 3 })) return 'H3';
+    if (editor.isActive('heading', { level: 4 })) return 'H4';
+    return 'Normal';
+  };
+
   return (
-    <div className="flex items-center flex-wrap gap-0.5 px-3 py-1.5 border-b border-stone-200/60 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/70 backdrop-blur-sm sticky top-0 z-20 text-xs">
-      {/* Undo / Redo */}
-      <div className="flex items-center">
+    <div className="flex items-center justify-between px-3 py-1.5 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md select-none text-xs flex-wrap gap-1">
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
+      <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={handlePdfFile} />
+      <input ref={sheetInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleSpreadsheetFile} />
+
+      {/* Main Tools Container: Single Row, Logical Groups */}
+      <div className="flex items-center gap-0.5 flex-wrap">
+        {/* GROUP 1: HISTORY (Undo / Redo) */}
         <button
           type="button"
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
-          className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 disabled:opacity-30 rounded transition"
+          className={btnClass(false) + ' disabled:opacity-30 disabled:hover:bg-transparent'}
           title="Undo (Ctrl+Z)"
         >
           <Undo2 className="w-3.5 h-3.5" />
@@ -231,47 +203,85 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           type="button"
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
-          className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 disabled:opacity-30 rounded transition"
+          className={btnClass(false) + ' disabled:opacity-30 disabled:hover:bg-transparent'}
           title="Redo (Ctrl+Y)"
         >
           <Redo2 className="w-3.5 h-3.5" />
         </button>
-      </div>
 
-      <div className="h-3.5 w-px bg-stone-200 dark:bg-zinc-800 mx-1" />
+        <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
 
-      {/* Headings */}
-      <div className="flex items-center">
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={btnClass(editor.isActive('heading', { level: 1 }))}
-          title="Heading 1 (#)"
-        >
-          <Heading1 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={btnClass(editor.isActive('heading', { level: 2 }))}
-          title="Heading 2 (##)"
-        >
-          <Heading2 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={btnClass(editor.isActive('heading', { level: 3 }))}
-          title="Heading 3 (###)"
-        >
-          <Heading3 className="w-3.5 h-3.5" />
-        </button>
-      </div>
+        {/* GROUP 2: HEADINGS DROPDOWN */}
+        <div className="relative" ref={headingsRef}>
+          <button
+            type="button"
+            onClick={() => setIsHeadingsOpen(!isHeadingsOpen)}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-zinc-850 rounded-md transition text-stone-700 dark:text-zinc-300"
+            title="Heading Level"
+          >
+            <span>{getHeadingLabel()}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
 
-      <div className="h-3.5 w-px bg-stone-200 dark:bg-zinc-800 mx-1" />
+          {isHeadingsOpen && (
+            <div className="absolute left-0 mt-1 w-36 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float py-1 z-40 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().setParagraph().run();
+                  setIsHeadingsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 ${editor.isActive('paragraph') ? 'font-bold text-blue-600' : ''}`}
+              >
+                Normal Text
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().toggleHeading({ level: 1 }).run();
+                  setIsHeadingsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 font-bold text-sm ${editor.isActive('heading', { level: 1 }) ? 'text-blue-600' : ''}`}
+              >
+                Heading 1
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().toggleHeading({ level: 2 }).run();
+                  setIsHeadingsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 font-semibold text-xs ${editor.isActive('heading', { level: 2 }) ? 'text-blue-600' : ''}`}
+              >
+                Heading 2
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().toggleHeading({ level: 3 }).run();
+                  setIsHeadingsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 font-medium text-xs ${editor.isActive('heading', { level: 3 }) ? 'text-blue-600' : ''}`}
+              >
+                Heading 3
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().toggleHeading({ level: 4 }).run();
+                  setIsHeadingsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-[11px] ${editor.isActive('heading', { level: 4 }) ? 'text-blue-600' : ''}`}
+              >
+                Heading 4
+              </button>
+            </div>
+          )}
+        </div>
 
-      {/* Text Style */}
-      <div className="flex items-center">
+        <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
+
+        {/* GROUP 3: TEXT FORMATTING */}
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -306,31 +316,37 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         </button>
         <button
           type="button"
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          className={btnClass(editor.isActive('code'))}
+          title="Inline Code"
+        >
+          <Code className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
           onClick={() => editor.chain().focus().toggleHighlight().run()}
           className={btnClass(editor.isActive('highlight'))}
           title="Highlight"
         >
-          <Highlighter className="w-3.5 h-3.5" />
+          <Highlighter className="w-3.5 h-3.5 text-amber-500" />
         </button>
+
+        <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
+
+        {/* GROUP 4: LISTS & CHECKLIST */}
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          className={btnClass(editor.isActive('code'))}
-          title="Inline Code (`code`)"
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          className={btnClass(editor.isActive('taskList'))}
+          title="Task Checklist"
         >
-          <Code className="w-3.5 h-3.5" />
+          <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
         </button>
-      </div>
-
-      <div className="h-3.5 w-px bg-stone-200 dark:bg-zinc-800 mx-1" />
-
-      {/* Lists */}
-      <div className="flex items-center">
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={btnClass(editor.isActive('bulletList'))}
-          title="Bullet List (-)"
+          title="Bullet List"
         >
           <List className="w-3.5 h-3.5" />
         </button>
@@ -338,344 +354,241 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           type="button"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           className={btnClass(editor.isActive('orderedList'))}
-          title="Numbered List (1.)"
+          title="Numbered List"
         >
           <ListOrdered className="w-3.5 h-3.5" />
         </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleTaskList().run()}
-          className={btnClass(editor.isActive('taskList'))}
-          title="Checklist / Task List ([ ])"
-        >
-          <CheckSquare className="w-3.5 h-3.5" />
-        </button>
+
+        <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
+
+        {/* GROUP 5: STRUCTURE (Table & Quote & Rule) */}
+        <div className="relative" ref={tableRef}>
+          <button
+            type="button"
+            onClick={() => setIsTableMenuOpen(!isTableMenuOpen)}
+            className={btnClass(editor.isActive('table'))}
+            title="Table Tools"
+          >
+            <TableIcon className="w-3.5 h-3.5" />
+          </button>
+
+          {isTableMenuOpen && (
+            <div className="absolute left-0 mt-1 w-44 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float py-1 z-40 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+                  setIsTableMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Insert 3x3 Table</span>
+              </button>
+              {editor.isActive('table') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editor.chain().focus().addRowAfter().run();
+                      setIsTableMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                  >
+                    <Rows className="w-3.5 h-3.5" />
+                    <span>Add Row Below</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editor.chain().focus().addColumnAfter().run();
+                      setIsTableMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                  >
+                    <Columns className="w-3.5 h-3.5" />
+                    <span>Add Column After</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editor.chain().focus().deleteTable().run();
+                      setIsTableMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Table</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           className={btnClass(editor.isActive('blockquote'))}
-          title="Blockquote (>)"
+          title="Blockquote"
         >
           <Quote className="w-3.5 h-3.5" />
         </button>
-      </div>
-
-      <div className="h-3.5 w-px bg-stone-200 dark:bg-zinc-800 mx-1" />
-
-      {/* Advanced Nodes: Tables, Math, Diagrams, Link, Image, PDF */}
-      <div className="flex items-center">
         <button
           type="button"
-          onClick={insertTable}
-          className={`p-1.5 rounded transition ${
-            editor.isActive('table')
-              ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold'
-              : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800'
-          }`}
-          title="Insert Table (3x3)"
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          className={btnClass(false)}
+          title="Horizontal Rule"
         >
-          <TableIcon className="w-3.5 h-3.5" />
+          <Minus className="w-3.5 h-3.5" />
         </button>
 
-        {/* In-toolbar Table controls when a table is active (prevents canvas jumps) */}
-        {editor.isActive('table') && (
-          <div className="flex items-center gap-0.5 px-1 py-0.5 mx-1 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded text-[11px]">
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().addRowBefore().run()}
-              className="p-1 hover:bg-amber-200/50 dark:hover:bg-amber-900/40 rounded transition"
-              title="Add Row Above"
-            >
-              <span className="flex items-center text-[10px] font-medium">+Row↑</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().addRowAfter().run()}
-              className="p-1 hover:bg-amber-200/50 dark:hover:bg-amber-900/40 rounded transition"
-              title="Add Row Below"
-            >
-              <span className="flex items-center text-[10px] font-medium">+Row↓</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().deleteRow().run()}
-              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded transition"
-              title="Delete Row"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-            <div className="h-3 w-px bg-amber-200 dark:bg-amber-800/60 mx-0.5" />
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().addColumnBefore().run()}
-              className="p-1 hover:bg-amber-200/50 dark:hover:bg-amber-900/40 rounded transition"
-              title="Add Column Left"
-            >
-              <span className="flex items-center text-[10px] font-medium">+Col←</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().addColumnAfter().run()}
-              className="p-1 hover:bg-amber-200/50 dark:hover:bg-amber-900/40 rounded transition"
-              title="Add Column Right"
-            >
-              <span className="flex items-center text-[10px] font-medium">+Col→</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().deleteColumn().run()}
-              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded transition"
-              title="Delete Column"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-            <div className="h-3 w-px bg-amber-200 dark:bg-amber-800/60 mx-0.5" />
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().toggleHeaderRow().run()}
-              className="px-1 py-0.5 hover:bg-amber-200/50 dark:hover:bg-amber-900/40 text-[10px] rounded transition font-medium"
-              title="Toggle Header Row"
-            >
-              Header
-            </button>
-            <button
-              type="button"
-              onClick={() => editor.chain().focus().deleteTable().run()}
-              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded transition"
-              title="Delete Table"
-            >
-              <span className="flex items-center text-[10px] font-medium text-red-600 dark:text-red-400">Del Table</span>
-            </button>
-          </div>
-        )}
+        <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
 
-        {/* Math menu: Inline & Block */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowMathMenu(!showMathMenu)}
-            className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition flex items-center"
-            title="LaTeX Mathematics (Inline or Block)"
-          >
-            <Sigma className="w-3.5 h-3.5" />
-            <ChevronDown className="w-2 h-2 ml-0.5 opacity-60" />
-          </button>
-          {showMathMenu && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setShowMathMenu(false)} />
-              <div className="absolute left-0 mt-1 z-40 w-44 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg shadow-float py-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => addMathEquation('inline')}
-                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center justify-between"
-                >
-                  <span>Inline Formula</span>
-                  <span className="text-[10px] text-stone-400 font-mono">\(x\)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addMathEquation('block')}
-                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center justify-between"
-                >
-                  <span>Block Equation</span>
-                  <span className="text-[10px] text-stone-400 font-mono">\[E=mc^2\]</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
+        {/* GROUP 6: CODE, MATH & MERMAID */}
         <button
           type="button"
-          onClick={addMermaidDiagram}
-          className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition"
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          className={btnClass(editor.isActive('codeBlock'))}
+          title="Code Block"
+        >
+          <Code className="w-3.5 h-3.5 text-stone-700 dark:text-zinc-300 font-bold" />
+        </button>
+        <button
+          type="button"
+          onClick={() => editor.chain().focus().insertContent('<div data-type="math-block" data-latex="E = mc^2"></div>').run()}
+          className={btnClass(false)}
+          title="Insert Math Equation ($$)"
+        >
+          <Sigma className="w-3.5 h-3.5 text-purple-600" />
+        </button>
+        <button
+          type="button"
+          onClick={() => editor.chain().focus().insertContent('<div data-type="mermaid-block" data-code="graph TD\\n  A[Start] --> B[Next]\\n  B --> C[End]"></div>').run()}
+          className={btnClass(false)}
           title="Insert Mermaid Diagram"
         >
-          <Workflow className="w-3.5 h-3.5" />
+          <Workflow className="w-3.5 h-3.5 text-emerald-600" />
         </button>
 
+        <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
+
+        {/* GROUP 7: INSERTS (Link, Image) */}
         <button
           type="button"
           onClick={setLink}
           className={btnClass(editor.isActive('link'))}
-          title="Add / Edit Hyperlink"
+          title="Insert Link (Ctrl+K)"
         >
           <LinkIcon className="w-3.5 h-3.5" />
         </button>
-
-        {/* Image upload */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition"
-          title="Insert Image from Computer"
+          className={btnClass(false)}
+          title="Upload Image"
         >
           <ImageIcon className="w-3.5 h-3.5" />
         </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleImageFile}
-        />
 
-        {/* PDF upload */}
+        {/* GROUP 8: ATTACHMENTS (PDF, Spreadsheet) */}
         <button
           type="button"
           onClick={() => pdfInputRef.current?.click()}
-          className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition flex items-center gap-0.5"
-          title="Attach PDF Document (Lightweight Binary Blob)"
+          className={btnClass(false)}
+          title="Attach PDF Document"
         >
-          <FileText className="w-3.5 h-3.5" />
-          <span className="text-[10px] font-bold">PDF</span>
+          <FileText className="w-3.5 h-3.5 text-red-500" />
         </button>
-        <input
-          ref={pdfInputRef}
-          type="file"
-          accept="application/pdf"
-          className="hidden"
-          onChange={handlePdfFile}
-        />
-
         <button
           type="button"
-          onClick={insertLinkCard}
-          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition flex items-center gap-0.5"
-          title="Insert Web Link Card"
+          onClick={() => sheetInputRef.current?.click()}
+          className={btnClass(false)}
+          title="Attach / Embed CSV or XLSX Spreadsheet"
         >
-          <Bookmark className="w-3.5 h-3.5" />
-          <span className="text-[10px] font-bold">Link</span>
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
         </button>
+      </div>
 
+      {/* Right Side: Find/Replace, Outline Toggle & More Tools Menu */}
+      <div className="flex items-center gap-1">
+        {/* Find & Replace */}
         <button
           type="button"
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition"
-          title="Horizontal Rule (---)"
+          onClick={onToggleFindReplace}
+          className={btnClass(showFindReplace)}
+          title="Find and Replace (Ctrl+F)"
         >
-          <Minus className="w-3.5 h-3.5" />
+          <Search className="w-3.5 h-3.5" />
         </button>
-        <EmojiPicker onSelect={insertEmoji} />
-      </div>
 
-      <div className="h-3.5 w-px bg-stone-200 dark:bg-zinc-800 mx-1" />
-
-      {/* Smart Import, Templates, Version History & Paste Options */}
-      <div className="flex items-center gap-0.5">
-        {onOpenImport && (
-          <button
-            type="button"
-            onClick={onOpenImport}
-            className="p-1.5 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition flex items-center gap-1 font-medium"
-            title="Universal Smart Import (.md, .docx, .pdf, .html, .txt)"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">Import</span>
-          </button>
-        )}
-
-        {onOpenTemplates && (
-          <button
-            type="button"
-            onClick={onOpenTemplates}
-            className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition flex items-center gap-1"
-            title="Note Templates"
-          >
-            <LayoutTemplate className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">Templates</span>
-          </button>
-        )}
-
-        {onOpenHistory && (
-          <button
-            type="button"
-            onClick={onOpenHistory}
-            className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition flex items-center gap-1"
-            title="Version History"
-          >
-            <History className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">History</span>
-          </button>
-        )}
-
-        {/* Smart Paste Menu */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowPasteMenu(!showPasteMenu)}
-            className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800 rounded transition flex items-center"
-            title="Paste Options"
-          >
-            <ClipboardPaste className="w-3.5 h-3.5" />
-            <ChevronDown className="w-2.5 h-2.5 ml-0.5 opacity-60" />
-          </button>
-
-          {showPasteMenu && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setShowPasteMenu(false)} />
-              <div className="absolute left-0 mt-1 z-40 w-48 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg shadow-float py-1 text-xs">
-                <button
-                  type="button"
-                  onClick={handleExplicitPasteMarkdown}
-                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center justify-between"
-                >
-                  <span>Smart Paste (Formatted)</span>
-                  <kbd className="text-[9px] bg-stone-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-stone-400">Ctrl+V</kbd>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExplicitPastePlain}
-                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center justify-between"
-                >
-                  <span>Paste Plain Text</span>
-                  <kbd className="text-[9px] bg-stone-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-stone-400">Ctrl+Shift+V</kbd>
-                </button>
-                <div className="my-1 border-t border-stone-100 dark:border-zinc-800" />
-                <button
-                  type="button"
-                  onClick={handleCleanDocumentContent}
-                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 text-amber-700 dark:text-amber-400 flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Clean & Normalize Content</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Right side: TOC toggle and Find/Replace */}
-      <div className="ml-auto flex items-center gap-1">
+        {/* Outline Toggle */}
         {onToggleToc && (
           <button
             type="button"
             onClick={onToggleToc}
-            className={`p-1.5 rounded transition flex items-center gap-1 ${
-              showToc
-                ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-semibold'
-                : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800'
-            }`}
+            className={btnClass(showToc)}
             title="Toggle Outline / Table of Contents"
           >
-            <ListTree className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline text-[11px]">Outline</span>
+            <ListTree className="w-3.5 h-3.5 text-blue-600" />
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={onToggleFindReplace}
-          className={`p-1.5 rounded transition ${
-            showFindReplace
-              ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-              : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/50 dark:hover:bg-zinc-800'
-          }`}
-          title="Find & Replace (Ctrl+F)"
-        >
-          <Search className="w-3.5 h-3.5" />
-        </button>
+        {/* MORE DROPDOWN MENU */}
+        <div className="relative" ref={moreRef}>
+          <button
+            type="button"
+            onClick={() => setIsMoreOpen(!isMoreOpen)}
+            className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-zinc-900 rounded-md transition"
+            title="More Options"
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </button>
+
+          {isMoreOpen && (
+            <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float py-1.5 z-40 text-xs">
+              {onOpenTemplates && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenTemplates();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                >
+                  <LayoutTemplate className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Choose Template</span>
+                </button>
+              )}
+              {onOpenHistory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenHistory();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                >
+                  <History className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Version History</span>
+                </button>
+              )}
+              {onOpenImport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenImport();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                >
+                  <Upload className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Smart Import Document</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

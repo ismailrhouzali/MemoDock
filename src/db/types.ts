@@ -63,7 +63,31 @@ export interface ResourceCollection {
   createdAt: number;
 }
 
-export type WorkspaceView = 'notes' | 'resources' | 'documents';
+export type WorkspaceView = 'notes' | 'resources' | 'documents' | 'spreadsheets';
+
+export interface SpreadsheetSheet {
+  id: string;
+  name: string;
+  headers: string[];
+  rows: string[][];
+}
+
+export interface Spreadsheet {
+  id: string;
+  title: string;
+  sheets: SpreadsheetSheet[];
+  activeSheetIndex: number;
+  tags: string[];
+  collection?: string;
+  noteId?: string | null;
+  createdAt: number;
+  updatedAt: number;
+  isFavorite: boolean;
+  isPinned: boolean;
+  isArchived: boolean;
+  isTrash: boolean;
+  sourceFileName?: string;
+}
 
 export interface NoteVersion {
   id: string;
@@ -121,8 +145,18 @@ export interface SidebarVisibility {
   mode: SidebarMode;
 }
 
+export type ThemePreset =
+  | 'default-light'
+  | 'warm-light'
+  | 'cool-light'
+  | 'soft-gray'
+  | 'midnight-dark'
+  | 'deep-dark';
+
+export type WorkspaceLayoutPreset = 'minimal' | 'balanced' | 'complete' | 'focus';
+
 export interface EditorLayoutSettings {
-  mode: 'standard' | 'minimal' | 'focus';
+  mode: WorkspaceLayoutPreset | 'standard'; // 'standard' mapped to 'balanced' for backward compatibility
   showToolbar: boolean;
   showWordCount: boolean;
   showCharCount: boolean;
@@ -132,6 +166,37 @@ export interface EditorLayoutSettings {
   showTableOfContents: boolean;
   tocCollapsed: boolean;
   tocLevel: 'h2' | 'h3' | 'h4';
+  lineHeight?: 'tight' | 'normal' | 'relaxed';
+  paragraphSpacing?: 'compact' | 'normal' | 'spacious';
+}
+
+export type WorkspaceProfileType = 'study' | 'development' | 'research' | 'writing' | 'custom';
+
+export interface WorkspaceProfile {
+  id: string;
+  name: string;
+  type: WorkspaceProfileType;
+  description: string;
+  theme: ThemeMode;
+  themePreset: ThemePreset;
+  accentColor?: string;
+  layoutMode: WorkspaceLayoutPreset;
+  sidebarVisible: boolean;
+  sidebarMode: SidebarMode;
+  sidebarWidth?: number;
+  outlineVisible: boolean;
+  outlinePosition?: 'left' | 'right';
+  editorWidth: EditorWidth;
+  fontFamily: EditorFont;
+  fontSize: EditorFontSize;
+}
+
+export interface KeyboardShortcut {
+  id: string;
+  label: string;
+  key: string;
+  description: string;
+  category: 'navigation' | 'editor' | 'workspace';
 }
 
 export interface GoogleDriveSettings {
@@ -164,6 +229,8 @@ export interface ConflictRecord {
 
 export interface AppSettings {
   theme: ThemeMode;
+  themePreset?: ThemePreset;
+  accentColor?: string; // hex color e.g. '#2563eb'
   editorWidth: EditorWidth;
   fontFamily: EditorFont;
   fontSize: EditorFontSize;
@@ -176,13 +243,21 @@ export interface AppSettings {
   aiModel: string;
   aiBaseUrl?: string;
 
-  // V2 Advanced Settings
+  // Workspace & Sidebar Settings
   noteListMode: NoteListDisplayMode;
   sidebarVisibility: SidebarVisibility;
+  sidebarWidth?: number; // 200 to 450 px
   editorLayout: EditorLayoutSettings;
+  outlinePosition?: 'left' | 'right';
+  outlineWidth?: number;
   storageMode: StorageMode;
   googleDrive: GoogleDriveSettings;
   localStorageFolder: LocalStorageFolderSettings;
+
+  // Workspace Profiles & Shortcuts (MemoDock V3)
+  activeProfileId?: string;
+  workspaceProfiles?: WorkspaceProfile[];
+  customShortcuts?: Record<string, string>;
 }
 
 export type ViewFilter = 
