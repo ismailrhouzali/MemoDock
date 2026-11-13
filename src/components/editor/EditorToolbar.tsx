@@ -65,10 +65,13 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const [isHeadingsOpen, setIsHeadingsOpen] = useState(false);
   const [isTableMenuOpen, setIsTableMenuOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isHighlightOpen, setIsHighlightOpen] = useState(false);
+  const [activeHighlightColor, setActiveHighlightColor] = useState('#fef08a');
 
   const headingsRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
 
   // Close menus on outside click
   useEffect(() => {
@@ -81,6 +84,9 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       }
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
         setIsMoreOpen(false);
+      }
+      if (highlightRef.current && !highlightRef.current.contains(e.target as Node)) {
+        setIsHighlightOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutside);
@@ -322,14 +328,74 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         >
           <Code className="w-3.5 h-3.5" />
         </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleHighlight().run()}
-          className={btnClass(editor.isActive('highlight'))}
-          title="Highlight"
-        >
-          <Highlighter className="w-3.5 h-3.5 text-amber-500" />
-        </button>
+        {/* Multi-Color Highlighter */}
+        <div className="relative inline-flex items-center" ref={highlightRef}>
+          <button
+            type="button"
+            onClick={() => {
+              if (editor.isActive('highlight')) {
+                editor.chain().focus().unsetHighlight().run();
+              } else {
+                editor.chain().focus().setHighlight({ color: activeHighlightColor }).run();
+              }
+            }}
+            className={`p-1.5 rounded-l text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-zinc-800 transition ${
+              editor.isActive('highlight') ? 'bg-amber-100/70 dark:bg-amber-950/40 font-bold' : ''
+            }`}
+            title="Highlight Text (Toggle)"
+          >
+            <Highlighter className="w-3.5 h-3.5" style={{ color: activeHighlightColor }} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsHighlightOpen(!isHighlightOpen)}
+            className="p-1 rounded-r hover:bg-stone-200/60 dark:hover:bg-zinc-800 text-stone-400 hover:text-stone-700 transition"
+            title="Choose Highlighter Color"
+          >
+            <ChevronDown className="w-2.5 h-2.5" />
+          </button>
+
+          {isHighlightOpen && (
+            <div className="absolute left-0 top-full mt-1 w-44 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
+              <span className="text-[10px] uppercase font-semibold text-stone-400 px-1 mb-1 block">
+                Highlighter Colors
+              </span>
+              <div className="grid grid-cols-6 gap-1 mb-2">
+                {[
+                  { name: 'Yellow', hex: '#fef08a' },
+                  { name: 'Green', hex: '#bbf7d0' },
+                  { name: 'Blue', hex: '#bfdbfe' },
+                  { name: 'Purple', hex: '#e9d5ff' },
+                  { name: 'Pink', hex: '#fbcfe8' },
+                  { name: 'Orange', hex: '#fed7aa' },
+                ].map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => {
+                      setActiveHighlightColor(c.hex);
+                      editor.chain().focus().setHighlight({ color: c.hex }).run();
+                      setIsHighlightOpen(false);
+                    }}
+                    style={{ backgroundColor: c.hex }}
+                    className="w-5 h-5 rounded-full border border-stone-300 dark:border-zinc-700 hover:scale-110 transition shadow-2xs"
+                    title={c.name}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().unsetHighlight().run();
+                  setIsHighlightOpen(false);
+                }}
+                className="w-full text-center py-1 text-[11px] text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800 rounded transition font-medium"
+              >
+                Clear Highlight
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
 

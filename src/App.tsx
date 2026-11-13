@@ -34,7 +34,7 @@ import { SearchModal } from './components/modals/SearchModal';
 import { TemplatesModal } from './components/modals/TemplatesModal';
 import { VersionHistoryModal } from './components/modals/VersionHistoryModal';
 import { ImportModal } from './components/modals/ImportModal';
-import { FileText, Plus } from 'lucide-react';
+import { FileText, Plus, Columns, X } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentFilter, setCurrentFilter] = useState<ViewFilter>({ type: 'all' });
@@ -43,6 +43,9 @@ export const App: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('notes');
+  const [splitWorkspace, setSplitWorkspace] = useState(false);
+  const [splitRightView, setSplitRightView] = useState<WorkspaceView>('documents');
+  const [autoHideNavbar, setAutoHideNavbar] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
@@ -87,6 +90,9 @@ export const App: React.FC = () => {
       await seedInitialDataIfNeeded();
       const loadedSettings = await settingsStorage.get();
       setSettings(loadedSettings);
+      if (loadedSettings.splitWorkspace !== undefined) setSplitWorkspace(loadedSettings.splitWorkspace);
+      if (loadedSettings.splitRightView !== undefined) setSplitRightView(loadedSettings.splitRightView);
+      if (loadedSettings.autoHideNavbar !== undefined) setAutoHideNavbar(loadedSettings.autoHideNavbar);
     }
     init();
 
@@ -280,6 +286,18 @@ export const App: React.FC = () => {
         onCycleTheme={cycleTheme}
         layoutPreset={settings.editorLayout?.mode || 'balanced'}
         onSelectLayoutPreset={handleSelectLayoutPreset}
+        isSplitWorkspace={splitWorkspace}
+        onToggleSplitWorkspace={() => {
+          const next = !splitWorkspace;
+          setSplitWorkspace(next);
+          settingsStorage.set({ splitWorkspace: next });
+        }}
+        autoHideNavbar={autoHideNavbar}
+        onToggleAutoHideNavbar={() => {
+          const next = !autoHideNavbar;
+          setAutoHideNavbar(next);
+          settingsStorage.set({ autoHideNavbar: next });
+        }}
       />
 
       {/* Main Workspace Body */}
@@ -346,49 +364,138 @@ export const App: React.FC = () => {
         />
 
         {/* Center Main Editor View */}
-        <main className="flex-1 flex flex-col h-full overflow-hidden">
-          {activeNote ? (
-            <TipTapEditor
-              key={activeNote.id}
-              note={activeNote}
-              allNotes={notes}
-              folders={folders}
-              availableTags={tags}
-              onUpdateNote={handleUpdateActiveNote}
-              onDeleteNote={deleteNote}
-              onNavigateToNote={(id) => setActiveNoteId(id)}
-              editorWidth={settings.editorWidth}
-              editorFont={settings.fontFamily}
-              editorFontSize={settings.fontSize}
-              editorLayout={settings.editorLayout}
-              focusMode={focusMode}
-              onToggleFocusMode={() => setFocusMode(!focusMode)}
-              isSidebarOpen={isSidebarOpen}
-              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-              theme={theme}
-              onCycleTheme={cycleTheme}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              onStatsChange={setStats}
-              onOpenTemplates={() => setIsTemplatesOpen(true)}
-              onOpenHistory={() => setIsHistoryOpen(true)}
-            />
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 dark:text-zinc-600 select-none">
-              <FileText className="w-12 h-12 mb-3 stroke-1 opacity-50" />
-              <h3 className="text-base font-medium text-stone-700 dark:text-zinc-400 mb-1">
-                No note selected
-              </h3>
-              <p className="text-xs text-stone-400 dark:text-zinc-500 max-w-sm mb-4 leading-relaxed">
-                Choose a note from the sidebar or start writing a new note.
-              </p>
-              <button
-                type="button"
-                onClick={handleCreateNote}
-                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Create New Note</span>
-              </button>
+        <main className={`flex-1 flex ${splitWorkspace && !focusMode ? 'flex-row' : 'flex-col'} h-full overflow-hidden`}>
+          {/* Note Editor Pane */}
+          <div className={`${splitWorkspace && !focusMode ? 'w-1/2 border-r border-stone-200 dark:border-stone-800' : 'w-full'} flex flex-col h-full overflow-hidden`}>
+            {activeNote ? (
+              <TipTapEditor
+                key={activeNote.id}
+                note={activeNote}
+                allNotes={notes}
+                folders={folders}
+                availableTags={tags}
+                onUpdateNote={handleUpdateActiveNote}
+                onDeleteNote={deleteNote}
+                onNavigateToNote={(id) => setActiveNoteId(id)}
+                editorWidth={settings.editorWidth}
+                editorFont={settings.fontFamily}
+                editorFontSize={settings.fontSize}
+                editorLayout={settings.editorLayout}
+                focusMode={focusMode}
+                onToggleFocusMode={() => setFocusMode(!focusMode)}
+                isSidebarOpen={isSidebarOpen}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                theme={theme}
+                onCycleTheme={cycleTheme}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onStatsChange={setStats}
+                onOpenTemplates={() => setIsTemplatesOpen(true)}
+                onOpenHistory={() => setIsHistoryOpen(true)}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 dark:text-zinc-600 select-none">
+                <FileText className="w-12 h-12 mb-3 stroke-1 opacity-50" />
+                <h3 className="text-base font-medium text-stone-700 dark:text-zinc-400 mb-1">
+                  No note selected
+                </h3>
+                <p className="text-xs text-stone-400 dark:text-zinc-500 max-w-sm mb-4 leading-relaxed">
+                  Choose a note from the sidebar or start writing a new note.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCreateNote}
+                  className="px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create New Note</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Split Right Reference Pane */}
+          {splitWorkspace && !focusMode && (
+            <div className="w-1/2 flex flex-col h-full overflow-hidden bg-stone-50 dark:bg-obsidian-900/60">
+              {/* Header with selector */}
+              <div className="h-10 border-b border-stone-200 dark:border-stone-800 px-3 flex items-center justify-between bg-white dark:bg-obsidian-900 select-none shrink-0">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mr-2">
+                    Reference
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSplitRightView('documents');
+                      settingsStorage.set({ splitRightView: 'documents' });
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                      splitRightView === 'documents'
+                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                        : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    PDF & Docs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSplitRightView('resources');
+                      settingsStorage.set({ splitRightView: 'resources' });
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                      splitRightView === 'resources'
+                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                        : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    Web Links
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSplitRightView('spreadsheets');
+                      settingsStorage.set({ splitRightView: 'spreadsheets' });
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                      splitRightView === 'spreadsheets'
+                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                        : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    Spreadsheets
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  title="Close Split View"
+                  onClick={() => {
+                    setSplitWorkspace(false);
+                    settingsStorage.set({ splitWorkspace: false });
+                  }}
+                  className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded hover:bg-stone-100 dark:hover:bg-stone-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-hidden">
+                {splitRightView === 'resources' ? (
+                  <ResourceGrid />
+                ) : splitRightView === 'spreadsheets' ? (
+                  <SpreadsheetHub
+                    onNavigateToNote={(targetId) => {
+                      setActiveNoteId(targetId);
+                    }}
+                  />
+                ) : (
+                  <DocumentHub
+                    onNavigateToNote={(targetId) => {
+                      setActiveNoteId(targetId);
+                    }}
+                  />
+                )}
+              </div>
             </div>
           )}
         </main>
@@ -423,6 +530,7 @@ export const App: React.FC = () => {
         onSaveSettings={handleSaveSettings}
         currentTheme={theme}
         onSetTheme={setTheme}
+        onEmptyTrash={emptyTrash}
       />
 
       {/* Templates Modal */}

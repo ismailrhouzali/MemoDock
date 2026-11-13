@@ -11,7 +11,6 @@ import {
   Cloud,
   HardDrive,
   Layout,
-  List,
   Type,
   RefreshCw,
   FolderOpen,
@@ -30,8 +29,10 @@ import {
   Monitor,
   Sun,
   Moon,
-  AlignLeft,
   Columns,
+  Trash2,
+  Tag as TagIcon,
+  HelpCircle,
 } from 'lucide-react';
 import {
   AppSettings,
@@ -41,13 +42,12 @@ import {
   EditorFont,
   EditorFontSize,
   NoteListDisplayMode,
-  SidebarMode,
   StorageMode,
   WorkspaceLayoutPreset,
   WorkspaceProfile,
   KeyboardShortcut,
 } from '../../db/types';
-import { DEFAULT_PROFILES, DEFAULT_KEYBOARD_SHORTCUTS } from '../../db/db';
+import { db, DEFAULT_PROFILES, DEFAULT_KEYBOARD_SHORTCUTS } from '../../db/db';
 import { storageManager } from '../../services/storage/storageManager';
 import { googleDriveService } from '../../services/googleDriveService';
 import { exportService } from '../../services/exportService';
@@ -58,7 +58,8 @@ interface SettingsModalProps {
   settings: AppSettings;
   onSaveSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
   currentTheme: ThemeMode;
-  onSetTheme: (theme: ThemeMode) => void;
+  onSetTheme: (theme: ThemeMode, preset?: ThemePreset, accent?: string) => void;
+  onEmptyTrash?: () => Promise<void>;
 }
 
 type TabKey =
@@ -83,7 +84,7 @@ const ACCENT_COLORS = [
 
 const THEME_PRESET_OPTIONS: { id: ThemePreset; name: string; desc: string; bgClass: string; dark: boolean }[] = [
   { id: 'default-light', name: 'Clean White', desc: 'Minimalist paper with crisp zinc contrast', bgClass: 'bg-white border-zinc-200 text-zinc-900', dark: false },
-  { id: 'warm-light', name: 'Warm Sepia', desc: 'Comfortable amber paper tone for long reading sessions', bgClass: 'bg-[#faf8f5] border-amber-200 text-stone-900', dark: false },
+  { id: 'warm-light', name: 'Warm Sepia', desc: 'Comfortable amber paper tone for reading', bgClass: 'bg-[#faf8f5] border-amber-200 text-stone-900', dark: false },
   { id: 'cool-light', name: 'Cool Frost', desc: 'Crisp light slate with cool blue undertones', bgClass: 'bg-[#f8fafc] border-slate-200 text-slate-900', dark: false },
   { id: 'soft-gray', name: 'Soft Gray', desc: 'Subtle neutral low-contrast studio gray', bgClass: 'bg-[#f4f4f5] border-zinc-300 text-zinc-800', dark: false },
   { id: 'midnight-dark', name: 'Midnight Navy', desc: 'Deep high-contrast blue-dark dark mode', bgClass: 'bg-[#0f172a] border-slate-700 text-slate-100', dark: true },
@@ -97,6 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveSettings,
   currentTheme,
   onSetTheme,
+  onEmptyTrash,
 }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('general');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -116,12 +118,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSave = async (updated?: Partial<AppSettings>) => {
     const toSave = updated ? { ...localSettings, ...updated } : localSettings;
     await onSaveSettings(toSave);
-    if (toSave.theme !== currentTheme) {
-      onSetTheme(toSave.theme);
-    }
-    if (toSave.accentColor) {
-      document.documentElement.style.setProperty('--primary-accent', toSave.accentColor);
-    }
+    onSetTheme(toSave.theme, toSave.themePreset, toSave.accentColor);
     setSavedFeedback(true);
     setTimeout(() => {
       setSavedFeedback(false);
@@ -133,7 +130,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleApplyProfile = (profile: WorkspaceProfile) => {
+  const handleApplyProfile = async (profile: WorkspaceProfile) => {
+    // 1. Seed recommended folders if missing
+    if (profile.defaultFolders && profile.defaultFolders.length > 0) {
+      for (const folderName of profile.defaultFolders) {
+        const existing = await db.folders.where('name').equals(folderName).first();
+        if (!existing) {
+          await db.folders.add({
+            id: `folder-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: folderName,
+            color: profile.accentColor || '#3b82f6',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
+
+    // 2. Seed recommended tags if missing
+    if (profile.defaultTags && profile.defaultTags.length > 0) {
+      for (const tagName of profile.defaultTags) {
+        const existing = await db.tags.where('name').equals(tagName).first();
+        if (!existing) {
+          await db.tags.add({
+            id: `tag-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: tagName,
+            color: profile.accentColor || '#3b82f6',
+          });
+        }
+      }
+    }
+
+    // 3. Update settings state
     setLocalSettings((prev) => ({
       ...prev,
       activeProfileId: profile.id,
@@ -151,7 +179,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         showTableOfContents: profile.outlineVisible,
       },
     }));
-    setSyncStatusMsg(`Profile "${profile.name}" applied successfully. Click Save Preferences to confirm.`);
+
+    onSetTheme(profile.theme, profile.themePreset, profile.accentColor);
+    setSyncStatusMsg(`Profile "${profile.name}" applied! Created default folders and tags. Click Save Preferences.`);
   };
 
   const handlePickLocalFolder = async () => {
@@ -306,12 +336,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Tab Navigation */}
         <div className="flex border-b border-stone-200/60 dark:border-zinc-800/60 px-4 gap-1 bg-stone-50/30 dark:bg-zinc-950/30 overflow-x-auto select-none">
           {[
-            { id: 'general', label: 'General & Appearance', icon: Palette },
+            { id: 'general', label: 'Appearance & Themes', icon: Palette },
             { id: 'profiles', label: 'Profiles', icon: Compass },
             { id: 'workspace', label: 'Workspace & Layout', icon: Layout },
             { id: 'editor', label: 'Typography & Outline', icon: Type },
             { id: 'shortcuts', label: 'Shortcuts', icon: Command },
-            { id: 'storage', label: 'Local Storage', icon: HardDrive },
+            { id: 'storage', label: 'Storage & Trash', icon: HardDrive },
             { id: 'gdrive', label: 'Google Drive', icon: Cloud },
             { id: 'ai', label: 'AI Assistant', icon: Sparkles },
           ].map((tab) => {
@@ -352,7 +382,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Content Body */}
         <div className="p-5 overflow-y-auto space-y-5 max-h-[62vh]">
 
-          {/* TAB 1: GENERAL & APPEARANCE */}
+          {/* TAB 1: APPEARANCE & THEMES */}
           {activeTab === 'general' && (
             <div className="space-y-5">
               {/* Theme Mode */}
@@ -372,7 +402,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         key={mode.id}
                         type="button"
-                        onClick={() => updateSetting('theme', mode.id)}
+                        onClick={() => {
+                          updateSetting('theme', mode.id);
+                          onSetTheme(mode.id, localSettings.themePreset, localSettings.accentColor);
+                        }}
                         className={`py-2 px-3 rounded-lg border text-xs font-medium transition flex items-center justify-center gap-2 ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 shadow-sm'
@@ -393,7 +426,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Visual Theme Preset
                 </label>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Select a refined color atmosphere calibrated for reading comfort and high legibility.
+                  Color atmospheres calibrated for reading comfort and high legibility.
                 </p>
                 <div className="grid grid-cols-3 gap-2.5">
                   {THEME_PRESET_OPTIONS.map((preset) => {
@@ -403,11 +436,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={preset.id}
                         type="button"
                         onClick={() => {
+                          const newTheme: ThemeMode = preset.dark ? 'dark' : 'light';
                           setLocalSettings((prev) => ({
                             ...prev,
                             themePreset: preset.id,
-                            theme: preset.dark ? 'dark' : 'light',
+                            theme: newTheme,
                           }));
+                          onSetTheme(newTheme, preset.id, localSettings.accentColor);
                         }}
                         className={`p-2.5 rounded-lg border text-left transition flex flex-col justify-between ${preset.bgClass} ${
                           isSelected
@@ -442,7 +477,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={c.hex}
                         type="button"
                         title={c.name}
-                        onClick={() => updateSetting('accentColor', c.hex)}
+                        onClick={() => {
+                          updateSetting('accentColor', c.hex);
+                          onSetTheme(localSettings.theme, localSettings.themePreset, c.hex);
+                        }}
                         style={{ backgroundColor: c.hex }}
                         className={`w-7 h-7 rounded-full transition flex items-center justify-center shadow-sm ${
                           isSelected ? 'ring-2 ring-offset-2 ring-stone-900 dark:ring-offset-zinc-900' : 'hover:scale-110'
@@ -456,7 +494,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <input
                       type="color"
                       value={localSettings.accentColor || '#2563eb'}
-                      onChange={(e) => updateSetting('accentColor', e.target.value)}
+                      onChange={(e) => {
+                        updateSetting('accentColor', e.target.value);
+                        onSetTheme(localSettings.theme, localSettings.themePreset, e.target.value);
+                      }}
                       className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
                       title="Custom hex color"
                     />
@@ -465,72 +506,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Auto-Save Delay */}
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
-                  Auto-Save Delay
-                </label>
-                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-2">
-                  Time to wait after typing stops before automatically persisting notes into local IndexedDB.
-                </p>
-                <select
-                  value={localSettings.autoSaveDelay}
-                  onChange={(e) => updateSetting('autoSaveDelay', Number(e.target.value))}
-                  className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value={300}>Instant (300 ms)</option>
-                  <option value={600}>Balanced (600 ms) — Recommended</option>
-                  <option value={1200}>Relaxed (1.2 seconds)</option>
-                  <option value={3000}>Periodic (3 seconds)</option>
-                </select>
-              </div>
-
-              {/* Spellcheck & Feedback */}
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localSettings.spellCheck}
-                    onChange={(e) => updateSetting('spellCheck', e.target.checked)}
-                    className="accent-blue-600 rounded"
-                  />
-                  <span className="text-stone-700 dark:text-stone-300 font-medium">
-                    Enable native browser spellcheck inside note editor
-                  </span>
-                </label>
-
-                <div className="p-3 bg-stone-50 dark:bg-zinc-800/40 border border-stone-200 dark:border-zinc-700/60 rounded-xl flex items-center justify-between gap-3 mt-3">
-                  <div>
-                    <h4 className="font-semibold text-xs text-stone-900 dark:text-stone-100">
-                      MemoDock Open Source Project
-                    </h4>
-                    <p className="text-[11px] text-stone-500 dark:text-zinc-400">
-                      Found an issue or want to suggest an improvement? Contribute on GitHub.
-                    </p>
-                  </div>
-                  <a
-                    href="https://github.com/ismailrhouzali/MemoDock"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition flex-shrink-0"
+              {/* Auto-Save & Spellcheck */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
+                    Auto-Save Delay
+                  </label>
+                  <select
+                    value={localSettings.autoSaveDelay}
+                    onChange={(e) => updateSetting('autoSaveDelay', Number(e.target.value))}
+                    className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <span>GitHub Repo</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                    <option value={300}>Instant (300 ms)</option>
+                    <option value={600}>Balanced (600 ms) — Recommended</option>
+                    <option value={1200}>Relaxed (1.2 seconds)</option>
+                    <option value={3000}>Periodic (3 seconds)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.spellCheck}
+                      onChange={(e) => updateSetting('spellCheck', e.target.checked)}
+                      className="accent-blue-600 rounded"
+                    />
+                    <span className="text-stone-700 dark:text-stone-300 font-medium">
+                      Browser spellcheck in editor
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 2: WORKSPACE PROFILES */}
+          {/* TAB 2: WORKSPACE PROFILES (WITH DEDICATED FOLDERS & TAGS) */}
           {activeTab === 'profiles' && (
             <div className="space-y-4">
               <div>
                 <h3 className="font-semibold text-sm text-stone-900 dark:text-stone-100 mb-1">
-                  Curated Workspace Profiles
+                  Curated Disciplines & Profiles
                 </h3>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500">
-                  Instantly configure MemoDock for specific disciplines: layout density, sidebar width, typography, and outline visibility in one click.
+                  Select a workflow profile. Applying a profile creates recommended folders, tags, and sets optimal layout, typography, and outline settings.
                 </p>
               </div>
 
@@ -551,64 +570,94 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   return (
                     <div
                       key={prof.id}
-                      className={`p-3.5 rounded-xl border transition flex items-start justify-between gap-4 ${
+                      className={`p-3.5 rounded-xl border transition flex flex-col gap-2.5 ${
                         isCurrent
                           ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-1 ring-blue-600'
                           : 'border-stone-200 dark:border-zinc-800 hover:bg-stone-50/60 dark:hover:bg-zinc-800/40'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-white shadow-sm"
-                          style={{ backgroundColor: prof.accentColor || '#2563eb' }}
-                        >
-                          <ProfileIcon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-xs text-stone-900 dark:text-stone-100">
-                              {prof.name}
-                            </span>
-                            {isCurrent && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white">
-                                Active Profile
-                              </span>
-                            )}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+                            style={{ backgroundColor: prof.accentColor || '#2563eb' }}
+                          >
+                            <ProfileIcon className="w-5 h-5" />
                           </div>
-                          <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed mb-2">
-                            {prof.description}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-stone-500 dark:text-zinc-400">
-                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
-                              Layout: <strong className="capitalize text-stone-700 dark:text-zinc-200">{prof.layoutMode}</strong>
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
-                              Font: <strong className="capitalize text-stone-700 dark:text-zinc-200">{prof.fontFamily}</strong>
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
-                              Theme: <strong className="capitalize text-stone-700 dark:text-zinc-200">{prof.theme} ({prof.themePreset})</strong>
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
-                              Sidebar: <strong className="text-stone-700 dark:text-zinc-200">{prof.sidebarWidth || 260}px</strong>
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
-                              Outline: <strong className="text-stone-700 dark:text-zinc-200">{prof.outlineVisible ? 'Enabled' : 'Hidden'}</strong>
-                            </span>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-xs text-stone-900 dark:text-stone-100">
+                                {prof.name}
+                              </span>
+                              {isCurrent && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white">
+                                  Active Profile
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed">
+                              {prof.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleApplyProfile(prof)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${
+                            isCurrent
+                              ? 'bg-blue-600 text-white cursor-default'
+                              : 'bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 shadow-sm'
+                          }`}
+                        >
+                          {isCurrent ? 'Current' : 'Apply Profile'}
+                        </button>
+                      </div>
+
+                      {/* Profile Curated Folders, Tags & Templates */}
+                      <div className="pt-2 border-t border-stone-200/60 dark:border-zinc-800/60 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                        <div>
+                          <span className="font-semibold text-stone-500 dark:text-zinc-400 flex items-center gap-1 mb-1">
+                            <Folder className="w-3 h-3 text-amber-500" />
+                            <span>Folders:</span>
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {prof.defaultFolders?.map((f) => (
+                              <span key={f} className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50">
+                                {f}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold text-stone-500 dark:text-zinc-400 flex items-center gap-1 mb-1">
+                            <TagIcon className="w-3 h-3 text-blue-500" />
+                            <span>Tags:</span>
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {prof.defaultTags?.map((t) => (
+                              <span key={t} className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50">
+                                #{t}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold text-stone-500 dark:text-zinc-400 flex items-center gap-1 mb-1">
+                            <PenTool className="w-3 h-3 text-purple-500" />
+                            <span>Templates:</span>
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {prof.recommendedTemplates?.map((tmpl) => (
+                              <span key={tmpl} className="px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50">
+                                {tmpl}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleApplyProfile(prof)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${
-                          isCurrent
-                            ? 'bg-blue-600 text-white cursor-default'
-                            : 'bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 shadow-sm'
-                        }`}
-                      >
-                        {isCurrent ? 'Current' : 'Apply Profile'}
-                      </button>
                     </div>
                   );
                 })}
@@ -616,13 +665,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: WORKSPACE & SIDEBAR */}
+          {/* TAB 3: WORKSPACE & LAYOUT */}
           {activeTab === 'workspace' && (
             <div className="space-y-4">
               {/* Presets */}
               <div>
                 <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
-                  Workspace Layout Experience
+                  Workspace Layout Presets
                 </label>
                 <div className="grid grid-cols-3 gap-2.5 mt-2">
                   {[
@@ -630,13 +679,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       id: 'minimal' as WorkspaceLayoutPreset,
                       title: 'Minimalist',
                       icon: Feather,
-                      desc: 'TabNotebook clean focus, floating toolbar, auto-title, no clutter',
+                      desc: 'TabNotebook clean digital paper, auto-title, no clutter',
                     },
                     {
                       id: 'balanced' as WorkspaceLayoutPreset,
                       title: 'Balanced',
                       icon: Layout,
-                      desc: 'Contextual sidebar, clean single toolbar, optional outline',
+                      desc: 'Contextual sidebar, compact toolbar, toggleable outline',
                     },
                     {
                       id: 'complete' as WorkspaceLayoutPreset,
@@ -687,6 +736,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
+              {/* Distraction-Free Options: Auto-Hide Navbar & Split Workspace */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 space-y-3">
+                <label className="block font-semibold text-stone-800 dark:text-stone-200">
+                  Distraction-Free & Multitasking Features
+                </label>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-start gap-2 p-3 rounded-xl border border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-850 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.autoHideNavbar || false}
+                      onChange={(e) => updateSetting('autoHideNavbar', e.target.checked)}
+                      className="accent-blue-600 rounded mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-xs text-stone-900 dark:text-stone-100 block">
+                        Auto-Hide Top Navigation Bar
+                      </span>
+                      <span className="text-[10px] text-stone-400 dark:text-zinc-500 leading-tight block mt-0.5">
+                        Navbar slides down only on mouse hover, maximizing immersion while writing.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2 p-3 rounded-xl border border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-850 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.splitWorkspace || false}
+                      onChange={(e) => updateSetting('splitWorkspace', e.target.checked)}
+                      className="accent-blue-600 rounded mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-xs text-stone-900 dark:text-stone-100 block">
+                        Split Workspace Mode (Side-by-Side)
+                      </span>
+                      <span className="text-[10px] text-stone-400 dark:text-zinc-500 leading-tight block mt-0.5">
+                        Keep a reference PDF, resource, or spreadsheet open side-by-side with your note.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {/* Sidebar Width Slider */}
               <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
                 <div className="flex items-center justify-between mb-1">
@@ -697,9 +789,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {localSettings.sidebarWidth || 260}px
                   </span>
                 </div>
-                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-2">
-                  Adjust default sidebar width (you can also drag the right edge resizer in the workspace).
-                </p>
                 <input
                   type="range"
                   min={200}
@@ -709,11 +798,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => updateSetting('sidebarWidth', Number(e.target.value))}
                   className="w-full accent-blue-600 cursor-pointer"
                 />
-                <div className="flex justify-between text-[10px] text-stone-400 mt-1 font-mono">
-                  <span>200px (Compact)</span>
-                  <span>260px (Default)</span>
-                  <span>450px (Wide)</span>
-                </div>
               </div>
 
               {/* Note List Density */}
@@ -739,46 +823,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       {m.label}
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sidebar Sections */}
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
-                  Visible Sidebar Navigation Links
-                </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    { key: 'showAll', label: 'All Notes' },
-                    { key: 'showFavorites', label: 'Favorites' },
-                    { key: 'showRecents', label: 'Recent Notes' },
-                    { key: 'showArchived', label: 'Archived Notes' },
-                    { key: 'showTrash', label: 'Trash' },
-                    { key: 'showFolders', label: 'Folders Navigation' },
-                    { key: 'showTags', label: 'Tags Filter' },
-                  ].map((section) => (
-                    <label
-                      key={section.key}
-                      className="flex items-center gap-2 p-2 rounded border border-stone-100 dark:border-zinc-800/60 hover:bg-stone-50 dark:hover:bg-zinc-800/30 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={(localSettings.sidebarVisibility as any)[section.key] !== false}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setLocalSettings((prev) => ({
-                            ...prev,
-                            sidebarVisibility: {
-                              ...prev.sidebarVisibility,
-                              [section.key]: val,
-                            },
-                          }));
-                        }}
-                        className="accent-blue-600 rounded"
-                      />
-                      <span className="text-stone-700 dark:text-zinc-300">{section.label}</span>
-                    </label>
                   ))}
                 </div>
               </div>
@@ -823,7 +867,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <div>
                     <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mb-1">
-                      Editor Canvas Width
+                      Editor Width
                     </span>
                     <select
                       value={localSettings.editorWidth}
@@ -842,7 +886,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Table of Contents / Outline System */}
               <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 space-y-3">
                 <label className="block font-semibold text-stone-800 dark:text-stone-200">
-                  Document Outline (Table of Contents)
+                  Interactive Document Outline (Table of Contents)
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -860,7 +904,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="accent-blue-600 rounded"
                   />
                   <span className="text-stone-700 dark:text-stone-300 font-medium">
-                    Show interactive Outline panel for long notes with headings
+                    Show Table of Contents outline panel for notes
                   </span>
                 </label>
 
@@ -915,45 +959,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Status & Chrome Metrics */}
-              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4">
-                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-2">
-                  Editor Chrome & Metrics
-                </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    { key: 'showToolbar', label: 'Top Formatting Toolbar' },
-                    { key: 'showBreadcrumbs', label: 'Breadcrumb Navigation' },
-                    { key: 'showWordCount', label: 'Word Counter' },
-                    { key: 'showReadingTime', label: 'Reading Time Estimate' },
-                    { key: 'showModifiedDate', label: 'Last Modified Date' },
-                  ].map((item) => (
-                    <label key={item.key} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={(localSettings.editorLayout as any)[item.key] !== false}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setLocalSettings((prev) => ({
-                            ...prev,
-                            editorLayout: {
-                              ...prev.editorLayout,
-                              [item.key]: checked,
-                            },
-                          }));
-                        }}
-                        className="accent-blue-600 rounded"
-                      />
-                      <span className="text-stone-700 dark:text-zinc-300">{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
-          {/* TAB 5: KEYBOARD SHORTCUTS MANAGER */}
+          {/* TAB 5: SHORTCUTS MANAGER */}
           {activeTab === 'shortcuts' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -962,7 +971,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Keyboard Shortcuts
                   </h3>
                   <p className="text-[11px] text-stone-400 dark:text-zinc-500">
-                    Boost your productivity with native hotkeys active across MemoDock.
+                    Productivity hotkeys active across MemoDock.
                   </p>
                 </div>
                 <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-800 p-0.5 rounded-lg text-[11px]">
@@ -1003,17 +1012,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 6: LOCAL STORAGE & BACKUP */}
+          {/* TAB 6: LOCAL STORAGE & EMPTY TRASH */}
           {activeTab === 'storage' && (
             <div className="space-y-4">
+              {/* Storage Mode */}
               <div>
                 <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
                   Storage & Data Location
                 </label>
-                <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Local-first storage guarantees full privacy and zero internet dependency.
-                </p>
-
                 <div className="grid grid-cols-2 gap-2.5 mb-4">
                   {[
                     {
@@ -1051,7 +1057,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Local Folder Directory Picker */}
+              {/* Physical Folder Path */}
               <div className="p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1066,10 +1072,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       : 'No folder chosen'}
                   </span>
                 </div>
-
-                <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed">
-                  When a folder is selected via the File System Access API, MemoDock synchronizes your notes as plain Markdown files (<code className="text-blue-600 dark:text-blue-400">notes/*.md</code>) directly into that disk folder.
-                </p>
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
@@ -1095,6 +1097,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
+              {/* EMPTY TRASH SECTION */}
+              <div className="p-3.5 bg-red-50/50 dark:bg-red-950/20 rounded-xl border border-red-200/60 dark:border-red-900/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    <span className="font-semibold text-xs text-red-900 dark:text-red-200">
+                      Empty Trash Bin (Vider la corbeille)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm('Permanently delete all notes in the trash? This cannot be undone.')) {
+                        if (onEmptyTrash) await onEmptyTrash();
+                        else {
+                          const all = await db.notes.toArray();
+                          const trashed = all.filter((n) => n.isTrash);
+                          if (trashed.length > 0) {
+                            await db.notes.bulkDelete(trashed.map((n) => n.id));
+                          }
+                        }
+                        setSyncStatusMsg('Trash bin emptied successfully.');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition"
+                  >
+                    Empty All Trash
+                  </button>
+                </div>
+                <p className="text-[11px] text-red-700/80 dark:text-red-400/80 leading-relaxed">
+                  Permanently remove all deleted notes from IndexedDB to free local storage space.
+                </p>
+              </div>
+
               {/* JSON Backup & Restore */}
               <div className="p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1105,9 +1141,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </span>
                   </div>
                 </div>
-                <p className="text-[11px] text-stone-500 dark:text-zinc-400 leading-relaxed">
-                  Export or restore all notes, folders, tags, and timestamps as an encrypted, portable JSON archive.
-                </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1256,12 +1289,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <span>{isSyncingDrive ? 'Syncing...' : 'Sync Now'}</span>
                         </button>
                       </div>
-
-                      {localSettings.googleDrive.lastSyncTimestamp && (
-                        <div className="text-[10px] text-stone-400 dark:text-zinc-500">
-                          Last cloud sync: {new Date(localSettings.googleDrive.lastSyncTimestamp).toLocaleTimeString()}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1269,7 +1296,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 8: AI ASSISTANT */}
+          {/* TAB 8: AI ASSISTANT & STEP-BY-STEP SETUP GUIDES */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
               <div>
@@ -1312,7 +1339,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ? 'AIzaSy...'
                         : localSettings.aiProvider === 'openai'
                         ? 'sk-proj-...'
-                        : 'Custom API Key or token'
+                        : 'Custom API Key or token (optional for Ollama)'
                     }
                     className="w-full bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 pr-8 text-xs font-mono text-stone-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
@@ -1353,6 +1380,97 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
               )}
+
+              {/* STEP-BY-STEP HELP GUIDE FOR SELECTED AI PROVIDER */}
+              <div className="mt-4 p-3.5 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2 font-semibold text-xs text-stone-800 dark:text-zinc-200">
+                  <HelpCircle className="w-4 h-4 text-amber-500" />
+                  <span>How to configure {localSettings.aiProvider === 'gemini' ? 'Google Gemini (Free)' : localSettings.aiProvider === 'openai' ? 'OpenAI' : 'Local Ollama'}</span>
+                </div>
+
+                {localSettings.aiProvider === 'gemini' && (
+                  <div className="text-[11px] text-stone-600 dark:text-zinc-400 space-y-2 leading-relaxed">
+                    <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/30 rounded-lg border border-blue-200/60 dark:border-blue-800/40">
+                      <strong className="text-blue-900 dark:text-blue-300 block mb-1">
+                        Google Gemini (Free Tier — 15 requests/min)
+                      </strong>
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>
+                          Open{' '}
+                          <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 underline font-semibold"
+                          >
+                            Google AI Studio (aistudio.google.com)
+                          </a>
+                        </li>
+                        <li>Sign in with your Google Account and click <strong>"Create API key"</strong></li>
+                        <li>Copy the generated key (starts with <code className="bg-white dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">AIzaSy...</code>) and paste it into the API Key field above</li>
+                        <li>Recommended Model: <code className="bg-white dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">gemini-1.5-flash</code> for instant responses</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+
+                {localSettings.aiProvider === 'openai' && (
+                  <div className="text-[11px] text-stone-600 dark:text-zinc-400 space-y-2 leading-relaxed">
+                    <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                      <strong className="text-emerald-900 dark:text-emerald-300 block mb-1">
+                        OpenAI Setup
+                      </strong>
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>
+                          Visit{' '}
+                          <a
+                            href="https://platform.openai.com/api-keys"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-600 dark:text-emerald-400 underline font-semibold"
+                          >
+                            OpenAI API Keys
+                          </a>
+                        </li>
+                        <li>Create a new secret key (starts with <code className="bg-white dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">sk-proj-...</code>)</li>
+                        <li>Recommended Model: <code className="bg-white dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">gpt-4o-mini</code> (fast & cost-effective)</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+
+                {localSettings.aiProvider === 'custom' && (
+                  <div className="text-[11px] text-stone-600 dark:text-zinc-400 space-y-2 leading-relaxed">
+                    <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 rounded-lg border border-purple-200/60 dark:border-purple-800/40">
+                      <strong className="text-purple-900 dark:text-purple-300 block mb-1">
+                        Ollama (100% Free & Offline Local AI)
+                      </strong>
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>
+                          Download Ollama from{' '}
+                          <a
+                            href="https://ollama.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-600 dark:text-purple-400 underline font-semibold"
+                          >
+                            ollama.com
+                          </a>
+                        </li>
+                        <li>
+                          Run in terminal:{' '}
+                          <code className="bg-white dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono font-bold text-stone-900 dark:text-white">
+                            ollama run llama3:8b
+                          </code>
+                        </li>
+                        <li>Base URL: <code className="bg-white dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">http://localhost:11434/v1</code></li>
+                        <li>Model: <code className="bg-white dark:bg-zinc-800 px-1 py-0.5 rounded font-mono">llama3:8b</code> (or <code className="font-mono">mistral</code>)</li>
+                        <li>API Key: Can be left empty or set to <code className="font-mono">ollama</code></li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -189,6 +189,9 @@ export interface WorkspaceProfile {
   editorWidth: EditorWidth;
   fontFamily: EditorFont;
   fontSize: EditorFontSize;
+  defaultFolders?: string[];
+  defaultTags?: string[];
+  recommendedTemplates?: string[];
 }
 
 export interface KeyboardShortcut {
@@ -258,6 +261,11 @@ export interface AppSettings {
   activeProfileId?: string;
   workspaceProfiles?: WorkspaceProfile[];
   customShortcuts?: Record<string, string>;
+
+  // Distraction-Free & Split Workspace
+  autoHideNavbar?: boolean;
+  splitWorkspace?: boolean;
+  splitRightView?: WorkspaceView;
 }
 
 export type ViewFilter = 

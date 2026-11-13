@@ -516,7 +516,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* Notes List with Drag & Drop */}
+          {/* Empty Trash Banner if in Trash view */}
+          {currentFilter.type === 'trash' && counts.trash > 0 && (
+            <div className="px-3 py-2 bg-red-50 dark:bg-red-950/40 border-b border-red-200/60 dark:border-red-900/40 flex items-center justify-between text-xs animate-in fade-in">
+              <span className="text-[11px] text-red-700 dark:text-red-300 font-medium truncate">
+                {counts.trash} deleted note{counts.trash > 1 ? 's' : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Permanently delete all notes in the trash? This action cannot be undone.')) {
+                    onEmptyTrash();
+                  }
+                }}
+                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-semibold flex items-center gap-1 shadow-2xs transition flex-shrink-0"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Empty Trash</span>
+              </button>
+            </div>
+          )}
+
+          {/* Notes List with Drag & Drop & Multi-Sort */}
           <div className="px-3 py-1.5 border-b border-stone-200/50 dark:border-zinc-800/50 flex items-center justify-between text-xs text-stone-400">
             <span className="font-semibold text-[10px] uppercase tracking-wider">
               Notes ({notes.length})
@@ -529,10 +550,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onChangeSort(f, o);
                 }}
                 className="bg-transparent text-[10px] text-stone-500 dark:text-zinc-400 focus:outline-none cursor-pointer"
+                title="Sort notes list"
               >
-                <option value="updatedAt-desc">Latest</option>
-                <option value="createdAt-desc">Newest</option>
-                <option value="title-asc">Title</option>
+                <option value="updatedAt-desc">Modified (Newest)</option>
+                <option value="updatedAt-asc">Modified (Oldest)</option>
+                <option value="createdAt-desc">Created (Newest)</option>
+                <option value="createdAt-asc">Created (Oldest)</option>
+                <option value="title-asc">Title (A-Z)</option>
+                <option value="title-desc">Title (Z-A)</option>
               </select>
             </div>
           </div>
@@ -560,7 +585,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <h4 className="font-medium text-xs truncate flex-1 text-stone-900 dark:text-stone-100">
                       {note.title || 'Untitled Note'}
                     </h4>
-                    {note.isPinned && <Pin className="w-3 h-3 text-amber-500 flex-shrink-0" />}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {note.isPinned && <Pin className="w-3 h-3 text-amber-500 fill-amber-500/20" />}
+                      <div className="hidden group-hover:flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTogglePin(note.id, note.isPinned);
+                          }}
+                          className={`p-0.5 rounded hover:bg-stone-200 dark:hover:bg-zinc-850 ${
+                            note.isPinned ? 'text-amber-500' : 'text-stone-400'
+                          }`}
+                          title={note.isPinned ? 'Unpin' : 'Pin to top'}
+                        >
+                          <Pin className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleFavorite(note.id, note.isFavorite);
+                          }}
+                          className={`p-0.5 rounded hover:bg-stone-200 dark:hover:bg-zinc-850 ${
+                            note.isFavorite ? 'text-amber-500 fill-amber-500' : 'text-stone-400'
+                          }`}
+                          title={note.isFavorite ? 'Favorited' : 'Favorite'}
+                        >
+                          <Star className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (note.isTrash) onPermanentlyDeleteNote(note.id);
+                            else onDeleteNote(note.id);
+                          }}
+                          className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-stone-400 hover:text-red-500"
+                          title={note.isTrash ? 'Delete permanently' : 'Move to trash'}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   {noteListMode === 'detailed' && note.plainText && (
                     <p className="text-[11px] text-stone-400 dark:text-zinc-500 line-clamp-1 mt-0.5">

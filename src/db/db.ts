@@ -12,6 +12,7 @@ import {
   ResourceCollection,
   Spreadsheet,
   WorkspaceProfile,
+  KeyboardShortcut,
 } from './types';
 
 export class NotebookDB extends Dexie {
@@ -94,6 +95,9 @@ export const DEFAULT_PROFILES: WorkspaceProfile[] = [
     editorWidth: 'normal',
     fontFamily: 'sans',
     fontSize: 'md',
+    defaultFolders: ['Personnel', 'Travail', 'Projets', 'Ressources'],
+    defaultTags: ['todo', 'projet', 'important', 'idée'],
+    recommendedTemplates: ['Daily Standup & Tasks', 'Meeting Notes', 'Weekly Review'],
   },
   {
     id: 'prof-study',
@@ -112,6 +116,9 @@ export const DEFAULT_PROFILES: WorkspaceProfile[] = [
     editorWidth: 'normal',
     fontFamily: 'sans',
     fontSize: 'md',
+    defaultFolders: ['Cours & CM', 'TD & Exercices', 'Fiches de Révision', 'Examens'],
+    defaultTags: ['cours', 'révision', 'formule', 'devoir', 'lecture'],
+    recommendedTemplates: ['Lecture Notes & Summary', 'Cornell Note System', 'Math & Formulas Cheat Sheet'],
   },
   {
     id: 'prof-dev',
@@ -130,6 +137,9 @@ export const DEFAULT_PROFILES: WorkspaceProfile[] = [
     editorWidth: 'wide',
     fontFamily: 'mono',
     fontSize: 'sm',
+    defaultFolders: ['Architecture', 'Snippets & Scripts', 'Bug Tracker', 'DevOps & CI/CD'],
+    defaultTags: ['code', 'frontend', 'backend', 'api', 'devops', 'bug'],
+    recommendedTemplates: ['Technical Design Doc (RFC)', 'Bug Report & Root Cause', 'API Endpoint Spec'],
   },
   {
     id: 'prof-research',
@@ -148,6 +158,9 @@ export const DEFAULT_PROFILES: WorkspaceProfile[] = [
     editorWidth: 'normal',
     fontFamily: 'serif',
     fontSize: 'md',
+    defaultFolders: ['Articles & Papers', 'Méthodologie', 'Données & Analyses', 'Bibliographie'],
+    defaultTags: ['recherche', 'arxiv', 'méthode', 'citation', 'hypothèse'],
+    recommendedTemplates: ['Research Paper Summary', 'Literature Review Matrix', 'Lab Experiment Log'],
   },
   {
     id: 'prof-writing',
@@ -166,7 +179,24 @@ export const DEFAULT_PROFILES: WorkspaceProfile[] = [
     editorWidth: 'narrow',
     fontFamily: 'serif',
     fontSize: 'lg',
+    defaultFolders: ['Brouillons & Idées', 'Articles & Blog', 'Essais', 'Publications'],
+    defaultTags: ['écriture', 'draft', 'inspiration', 'blog'],
+    recommendedTemplates: ['Distraction-Free Essay', 'Blog Post Draft', 'Outline & Storyboard'],
   },
+];
+
+export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
+  { id: 'search', label: 'Search Omnibar', key: 'Ctrl + K', description: 'Open search and command palette', category: 'navigation' },
+  { id: 'new-note', label: 'New Note', key: 'Ctrl + N', description: 'Create a new blank note', category: 'editor' },
+  { id: 'find-replace', label: 'Find & Replace', key: 'Ctrl + F', description: 'Search and replace in current note', category: 'editor' },
+  { id: 'focus-mode', label: 'Toggle Focus Mode', key: 'F11', description: 'Hide all chrome and sidebars for writing', category: 'workspace' },
+  { id: 'bold', label: 'Bold Text', key: 'Ctrl + B', description: 'Toggle bold formatting', category: 'editor' },
+  { id: 'italic', label: 'Italic Text', key: 'Ctrl + I', description: 'Toggle italic formatting', category: 'editor' },
+  { id: 'highlight', label: 'Highlight Text', key: 'Ctrl + Shift + H', description: 'Highlight selected text', category: 'editor' },
+  { id: 'inline-code', label: 'Inline Code', key: 'Ctrl + E', description: 'Format selection as code', category: 'editor' },
+  { id: 'task-list', label: 'Checklist Item', key: 'Ctrl + Shift + 9', description: 'Insert interactive checkbox', category: 'editor' },
+  { id: 'quick-popup', label: 'Open Extension Popup', key: 'Alt + N', description: 'Launch MemoDock floating quick capture popup', category: 'navigation' },
+  { id: 'full-tab', label: 'Open Full Workspace Tab', key: 'Ctrl + Shift + K', description: 'Open MemoDock in a dedicated browser tab', category: 'navigation' },
 ];
 
 // Default settings for MemoDock V3
@@ -220,6 +250,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     tocCollapsed: false,
     tocLevel: 'h3',
   },
+
+  // Distraction-Free & Split Mode
+  autoHideNavbar: false,
+  splitWorkspace: false,
+  splitRightView: 'documents',
 
   // Storage Mode
   storageMode: 'browser',

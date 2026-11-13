@@ -155,8 +155,11 @@ export function useNotes(
   };
 
   const emptyTrash = async () => {
-    const trashed = await db.notes.where('isTrash').equals(1 as any).toArray();
-    await db.notes.bulkDelete(trashed.map((n) => n.id));
+    const all = await db.notes.toArray();
+    const trashed = all.filter((n) => n.isTrash);
+    if (trashed.length > 0) {
+      await db.notes.bulkDelete(trashed.map((n) => n.id));
+    }
   };
 
   const duplicateNote = async (note: Note): Promise<Note> => {

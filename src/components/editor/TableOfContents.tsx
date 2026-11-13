@@ -149,24 +149,67 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
   }, [editor, headings]);
 
   // 4. Smooth Scroll to Heading
-  const scrollToHeading = (item: HeadingItem) => {
-    if (!editor) return;
+  const scrollToHeading = (item: HeadingItem, index: number) => {
+    if (!editor || !editor.view) return;
 
-    editor.chain().focus().setTextSelection(item.pos).run();
     setActivePos(item.pos);
 
-    const scrollContainer = editor.view.dom.closest('.overflow-y-auto') as HTMLElement | null;
+    // 1. Locate the heading DOM element
+    let targetEl: HTMLElement | null = null;
+
     try {
-      const dom = editor.view.domAtPos(item.pos);
-      const targetElement = dom.node instanceof HTMLElement ? dom.node : dom.node.parentElement;
-      if (targetElement && scrollContainer) {
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const targetRect = targetElement.getBoundingClientRect();
-        const offset = targetRect.top - containerRect.top + scrollContainer.scrollTop - 40;
-        scrollContainer.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+      const nodeDom = editor.view.nodeDOM(item.pos);
+      if (nodeDom instanceof HTMLElement) {
+        targetEl = nodeDom;
       }
+    } catch {}
+
+    // Fallback: match by index or text in document heading elements
+    if (!targetEl) {
+      const allHeadings = Array.from(
+        editor.view.dom.querySelectorAll('h1, h2, h3, h4')
+      ) as HTMLElement[];
+      if (allHeadings[index]) {
+        targetEl = allHeadings[index];
+      } else {
+        targetEl = allHeadings.find((h) => h.textContent?.trim() === item.text) || null;
+      }
+    }
+
+    // 2. Perform smooth scroll
+    const scrollContainer = editor.view.dom.closest('.overflow-y-auto') as HTMLElement | null;
+    if (targetEl && scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const targetRect = targetEl.getBoundingClientRect();
+      const targetScrollTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top) - 24;
+      scrollContainer.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
+    } else if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // 3. Highlight target element briefly to give clear feedback
+    if (targetEl) {
+      const prevBg = targetEl.style.backgroundColor;
+      const prevOutline = targetEl.style.outline;
+      targetEl.style.transition = 'background-color 0.3s ease, outline 0.3s ease';
+      targetEl.style.backgroundColor = 'rgba(37, 99, 235, 0.15)';
+      targetEl.style.outline = '2px solid rgba(37, 99, 235, 0.4)';
+      targetEl.style.borderRadius = '4px';
+      setTimeout(() => {
+        if (targetEl) {
+          targetEl.style.backgroundColor = prevBg;
+          targetEl.style.outline = prevOutline;
+        }
+      }, 1200);
+    }
+
+    // 4. Safely set cursor selection inside the heading text
+    try {
+      editor.chain().focus().setTextSelection(item.pos + 1).run();
     } catch {
-      // Fallback
+      try {
+        editor.commands.focus();
+      } catch {}
     }
   };
 
@@ -226,7 +269,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
             </p>
           </div>
         ) : (
-          headings.map((item) => {
+          headings.map((item, idx) => {
             const isActive = activePos === item.pos;
             const indentClass =
               item.level === 1
@@ -242,7 +285,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
                 key={item.id}
                 ref={isActive ? activeItemRef : null}
                 type="button"
-                onClick={() => scrollToHeading(item)}
+                onClick={() => scrollToHeading(item, idx)}
                 className={`w-full text-left py-1 pr-2 rounded transition flex items-center gap-1.5 truncate ${indentClass} ${
                   isActive
                     ? 'bg-blue-100/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-semibold shadow-2xs border-l-2 border-blue-600'

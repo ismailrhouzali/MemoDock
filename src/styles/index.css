@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --primary-accent: #2563eb;
+    --primary-accent-rgb: 37, 99, 235;
+  }
+
   html, body, #root {
     width: 100%;
     height: 100%;
@@ -14,6 +19,40 @@
     @apply font-sans text-stone-800 dark:text-stone-200 bg-white dark:bg-obsidian-950 transition-colors duration-150;
     -webkit-font-smoothing: antialiased;
   }
+}
+
+/* Theme Presets */
+html.theme-preset-warm body {
+  background-color: #faf8f5 !important;
+  color: #292524 !important;
+}
+html.theme-preset-cool body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+html.theme-preset-soft-gray body {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+}
+html.dark.theme-preset-midnight-dark body {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+html.dark.theme-preset-deep-dark body {
+  background-color: #000000 !important;
+  color: #f4f4f5 !important;
+}
+
+/* Dynamic Primary Accent helpers */
+.bg-primary-accent {
+  background-color: var(--primary-accent) !important;
+  color: #ffffff !important;
+}
+.text-primary-accent {
+  color: var(--primary-accent) !important;
+}
+.border-primary-accent {
+  border-color: var(--primary-accent) !important;
 }
 
 /* Chrome Extension Popup sizing guarantee: forces exact bounds to prevent 25px collapse */
