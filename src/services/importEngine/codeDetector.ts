@@ -78,8 +78,8 @@ export function protectCodeBlocks(text: string): CodeExtractionResult {
   const placeholders: CodeBlockPlaceholder[] = [];
   let codeCount = 0;
 
-  // Match ```lang\ncode\n```
-  const codeRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+  // Match ```lang\ncode\n``` supporting CRLF, LF, trailing spaces, and diverse languages (c++, c#, etc.)
+  const codeRegex = /```([a-zA-Z0-9_#+.-]*)[^\S\r\n]*\r?\n([\s\S]*?)\r?\n?```/g;
 
   const replaced = text.replace(codeRegex, (_match, rawLang, rawCode) => {
     // If it's a mermaid block, let the mermaid block processor handle it
@@ -88,7 +88,8 @@ export function protectCodeBlocks(text: string): CodeExtractionResult {
     }
 
     const lang = (rawLang.trim() || inferCodeLanguage(rawCode)).toLowerCase();
-    const id = `___CODE_BLOCK_${placeholders.length}_${Math.random().toString(36).substring(2, 6)}___`;
+    // Unique placeholder without underscores so Markdown parsers (like marked) do NOT parse them into <em><strong>
+    const id = `MEMODOCKCODEBLOCK${placeholders.length}X${Math.random().toString(36).substring(2, 8)}`;
 
     placeholders.push({
       id,
@@ -97,7 +98,8 @@ export function protectCodeBlocks(text: string): CodeExtractionResult {
     });
 
     codeCount++;
-    return `\n\n${id}\n\n`;
+    // Use HTML block div with unique identifier that marked preserves untouched
+    return `\n\n<div data-code-placeholder="${id}"></div>\n\n`;
   });
 
   return { text: replaced, placeholders, codeCount };
@@ -117,14 +119,24 @@ export function restoreCodeBlocks(html: string, placeholders: CodeBlockPlacehold
 
     const codeHtml = `<pre><code class="language-${item.lang}">${escapedCode}</code></pre>`;
 
-    // Replace both exact ID and <p>wrapped ID
-    const wrappedPattern = new RegExp(`<p>\\s*${item.id}\\s*<\\/p>`, 'g');
-    if (wrappedPattern.test(restored)) {
-      restored = restored.replace(wrappedPattern, codeHtml);
+    // 1. Direct replacement of the placeholder div (with or without <p> wrapper)
+    const divPattern = new RegExp(`<p>\\s*<div[^>]*data-code-placeholder=["']${item.id}["'][^>]*>\\s*<\\/div>\\s*<\\/p>|<div[^>]*data-code-placeholder=["']${item.id}["'][^>]*>\\s*<\\/div>`, 'gi');
+    
+    // 2. Bare or p/em/strong wrapped ID pattern
+    const generalPattern = new RegExp(`(?:<p>)?(?:<\\w+>)*\\s*${item.id}\\s*(?:<\\/\\w+>)*(?:<\\/p>)?`, 'gi');
+
+    if (divPattern.test(restored)) {
+      restored = restored.replace(divPattern, codeHtml);
+    } else if (generalPattern.test(restored)) {
+      restored = restored.replace(generalPattern, codeHtml);
     } else {
       restored = restored.replace(item.id, codeHtml);
     }
   }
+
+  // Safety cleanup: in case any un-restored legacy placeholder like CODE_BLOCK_0_... lingers in text
+  restored = restored.replace(/<p>\s*<em><strong>\s*CODE_BLOCK_\d+_[a-zA-Z0-9]+\s*<\/strong><\/em>\s*<\/p>/gi, '');
+  restored = restored.replace(/<em><strong>\s*CODE_BLOCK_\d+_[a-zA-Z0-9]+\s*<\/strong><\/em>/gi, '');
 
   return restored;
 }

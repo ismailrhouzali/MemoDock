@@ -166,6 +166,25 @@ assert(!frenchHtml.includes('\\---'), 'No leftover \\--- escapes in parsed outpu
 assert(!frenchHtml.includes('\\*'), 'No leftover \\* escapes in parsed output');
 assert(!frenchHtml.includes('\\>'), 'No leftover \\> escapes in parsed output');
 
+// 10b. Test Fenced Code Block without placeholder leakage
+const codeBlockSample = `## 3. Architecture générale
+
+\`\`\`
+┌─────────────────────────────────────────────────────────────────┐
+│                    WORKFLOW PRINCIPAL (quotidien 19h)            │
+│                                                                   │
+│  [Schedule 19h] → [Charger config (Sheet)]                        │
+└─────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+## 4. Spécifications fonctionnelles`;
+
+const codeBlockResult = convertTextToTipTapHtml(codeBlockSample);
+const codeBlockHtml = codeBlockResult.html;
+
+assert(!codeBlockHtml.includes('CODE_BLOCK'), 'No leftover CODE_BLOCK placeholder in code block paste');
+assert(codeBlockHtml.includes('<pre><code') && codeBlockHtml.includes('WORKFLOW PRINCIPAL'), 'Fenced ASCII code block properly converted into <pre><code>');
+
 // 11. Test Table of Contents Extraction on Ingested Content
 function extractHeadingsFromHtml(html) {
   const headings = [];
