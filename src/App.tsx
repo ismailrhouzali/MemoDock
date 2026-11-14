@@ -82,6 +82,7 @@ export const App: React.FC = () => {
     duplicateNote,
     reorderNotes,
     createFolder,
+    updateFolder,
     deleteFolder,
     createTag,
     deleteTag,
@@ -360,11 +361,13 @@ export const App: React.FC = () => {
           onTogglePin={handleTogglePin}
           onToggleFavorite={handleToggleFavorite}
           onCreateFolder={createFolder}
+          onUpdateFolder={updateFolder}
           onDeleteFolder={deleteFolder}
           onCreateTag={createTag}
           onDeleteTag={deleteTag}
           onEmptyTrash={emptyTrash}
           onMoveNoteToFolder={handleMoveNoteToFolder}
+          onUpdateNote={updateNote}
           onReorderNotes={reorderNotes}
           sortField={sortField}
           sortOrder={sortOrder}

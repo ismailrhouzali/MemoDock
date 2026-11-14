@@ -91,12 +91,20 @@ export function useNotes(
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const recents = all.filter((n) => !n.isTrash && !n.isArchived && n.updatedAt >= sevenDaysAgo);
 
+    const folderCounts: Record<string, number> = {};
+    for (const n of active) {
+      if (n.folderId) {
+        folderCounts[n.folderId] = (folderCounts[n.folderId] || 0) + 1;
+      }
+    }
+
     return {
       all: active.length,
       favorites: favorites.length,
       archived: archived.length,
       trash: trash.length,
       recents: recents.length,
+      folders: folderCounts,
     };
   }, []);
 
@@ -256,7 +264,7 @@ export function useNotes(
     notes: notes || [],
     folders: folders || [],
     tags: tags || [],
-    counts: counts || { all: 0, favorites: 0, archived: 0, trash: 0, recents: 0 },
+    counts: counts || { all: 0, favorites: 0, archived: 0, trash: 0, recents: 0, folders: {} },
     createNote,
     updateNote,
     deleteNote,
