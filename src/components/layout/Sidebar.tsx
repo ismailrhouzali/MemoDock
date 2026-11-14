@@ -73,6 +73,7 @@ interface SidebarProps {
   onMoveNoteToFolder?: (noteId: string, folderId: string | null) => Promise<void>;
   onUpdateNote?: (id: string, updates: Partial<Note>) => Promise<void>;
   onReorderNotes?: (draggedId: string, targetId: string) => Promise<void>;
+  onReorderFolders?: (draggedId: string, targetId: string) => Promise<void>;
   sortField: SortField;
   sortOrder: SortOrder;
   onChangeSort: (field: SortField, order: SortOrder) => void;
@@ -125,6 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMoveNoteToFolder,
   onUpdateNote,
   onReorderNotes,
+  onReorderFolders,
   sortField,
   sortOrder,
   onChangeSort,
@@ -193,7 +195,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Drag and drop state
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [dragOverReorderFolderId, setDragOverReorderFolderId] = useState<string | null>(null);
   const [dragOverNoteId, setDragOverNoteId] = useState<string | null>(null);
   const [dragOverNavTarget, setDragOverNavTarget] = useState<'all' | 'favorites' | 'trash' | null>(null);
 
@@ -335,7 +339,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         : 'text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-900 hover:text-stone-900 dark:hover:text-stone-200'
     }`;
 
-  // Minimalist Mode Sidebar (Unified Tree: Folders + Notes in the same continuous list)
+  // Minimalist Mode Sidebar (Unified Tree: Folders + Notes with bidirectional Drag & Drop reordering)
   if (isMinimalistMode || noteListMode === 'minimal') {
     // Partition notes by folder
     const existingFolderIds = new Set(folders.map((f) => f.id));
@@ -423,34 +427,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return (
         <div
           key={note.id}
-          draggable
+          draggable={!editingNoteId}
           onDragStart={(e) => {
+            e.stopPropagation();
             setDraggedNoteId(note.id);
+            setDraggedFolderId(null);
             e.dataTransfer.setData('text/note-id', note.id);
+            e.dataTransfer.setData('text/plain', note.id);
             e.dataTransfer.effectAllowed = 'move';
           }}
           onDragEnd={() => {
             setDraggedNoteId(null);
             setDragOverNoteId(null);
+            setDragOverFolderId(null);
           }}
           onDragOver={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
             if (draggedNoteId && draggedNoteId !== note.id) {
               setDragOverNoteId(note.id);
             }
           }}
-          onDragLeave={() => {
-            if (dragOverNoteId === note.id) setDragOverNoteId(null);
+          onDragLeave={(e) => {
+            const related = e.relatedTarget as Node | null;
+            if (!e.currentTarget.contains(related)) {
+              if (dragOverNoteId === note.id) setDragOverNoteId(null);
+            }
           }}
           onDrop={async (e) => {
             e.preventDefault();
+            e.stopPropagation();
             const srcId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
             setDragOverNoteId(null);
             setDraggedNoteId(null);
-            if (srcId && srcId !== note.id && onReorderNotes) {
-              await onReorderNotes(srcId, note.id);
-              onChangeSort('order', 'asc');
+            if (srcId && srcId !== note.id) {
+              // 1. Move to this note's folder (or root)
+              if (onMoveNoteToFolder) {
+                await onMoveNoteToFolder(srcId, note.folderId || null);
+              }
+              // 2. Reorder notes
+              if (onReorderNotes) {
+                await onReorderNotes(srcId, note.id);
+                onChangeSort('order', 'asc');
+              }
+              // 3. If target note is in a folder, expand it
+              if (note.folderId) {
+                setCollapsedFolderIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(note.folderId!);
+                  return next;
+                });
+              }
             }
           }}
           onClick={() => onSelectNote(note)}
@@ -458,13 +486,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             isInsideFolder ? 'pl-7 pr-3' : 'px-4'
           } ${
             isDragOver
-              ? 'ring-2 ring-blue-500 bg-blue-50/70 dark:bg-blue-950/40 border-t-2 border-t-blue-500'
+              ? 'border-t-2 border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 ring-1 ring-blue-400/50'
               : isActive
               ? 'border-l-[3px] border-blue-600 bg-stone-200/80 dark:bg-zinc-800/90 text-stone-900 dark:text-stone-100 font-semibold'
               : 'border-l-[3px] border-transparent text-stone-700 dark:text-zinc-300 hover:bg-stone-100/70 dark:hover:bg-zinc-900/60 font-normal'
           }`}
         >
-          <div className="flex items-center gap-1.5 truncate flex-1">
+          <div className="flex items-center gap-1 truncate flex-1">
+            <GripVertical className="w-3 h-3 text-stone-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-grab active:cursor-grabbing mr-0.5" />
             {note.isPinned && <Pin className="w-3 h-3 text-amber-500 fill-amber-500/20 flex-shrink-0" />}
             <span className="truncate block flex-1">{note.title || 'Untitled Note'}</span>
           </div>
@@ -707,10 +736,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             e.dataTransfer.dropEffect = 'move';
           }}
           onDrop={async (e) => {
-            // Dropping on empty area moves note to root (unassigns from folder)
-            const noteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
-            if (noteId && onMoveNoteToFolder) {
-              await onMoveNoteToFolder(noteId, null);
+            e.preventDefault();
+            const srcNoteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+            setDragOverFolderId(null);
+            setDragOverNoteId(null);
+            setDragOverReorderFolderId(null);
+            setDraggedNoteId(null);
+            setDraggedFolderId(null);
+            if (srcNoteId && onMoveNoteToFolder) {
+              await onMoveNoteToFolder(srcNoteId, null);
             }
           }}
         >
@@ -723,7 +757,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* Folders and their nested notes */}
               {folders.map((folder) => {
                 const isCollapsed = collapsedFolderIds.has(folder.id);
-                const isDragOver = dragOverFolderId === folder.id;
+                const isDragOverAsContainer = dragOverFolderId === folder.id;
+                const isDragOverReorder = dragOverReorderFolderId === folder.id;
                 const isEditing = editingFolderId === folder.id;
                 const folderNotes = notesByFolder[folder.id] || [];
 
@@ -763,28 +798,72 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                     ) : (
                       <div
+                        draggable={!editingFolderId}
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          setDraggedFolderId(folder.id);
+                          setDraggedNoteId(null);
+                          e.dataTransfer.setData('text/folder-id', folder.id);
+                          e.dataTransfer.setData('text/plain', folder.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => {
+                          setDraggedFolderId(null);
+                          setDragOverReorderFolderId(null);
+                          setDragOverFolderId(null);
+                        }}
                         onDragOver={(e) => {
                           e.preventDefault();
+                          e.stopPropagation();
                           e.dataTransfer.dropEffect = 'move';
-                          setDragOverFolderId(folder.id);
+                          if (draggedFolderId && draggedFolderId !== folder.id) {
+                            setDragOverReorderFolderId(folder.id);
+                            setDragOverFolderId(null);
+                          } else if (draggedNoteId || !draggedFolderId) {
+                            setDragOverFolderId(folder.id);
+                            setDragOverReorderFolderId(null);
+                          }
                         }}
-                        onDragLeave={() => setDragOverFolderId(null)}
+                        onDragLeave={(e) => {
+                          const related = e.relatedTarget as Node | null;
+                          if (!e.currentTarget.contains(related)) {
+                            if (dragOverFolderId === folder.id) setDragOverFolderId(null);
+                            if (dragOverReorderFolderId === folder.id) setDragOverReorderFolderId(null);
+                          }
+                        }}
                         onDrop={async (e) => {
                           e.preventDefault();
+                          e.stopPropagation();
+                          const srcFolderId = e.dataTransfer.getData('text/folder-id') || draggedFolderId;
+                          const srcNoteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
                           setDragOverFolderId(null);
-                          const noteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
-                          if (noteId && onMoveNoteToFolder) {
-                            await onMoveNoteToFolder(noteId, folder.id);
+                          setDragOverReorderFolderId(null);
+                          setDraggedFolderId(null);
+                          setDraggedNoteId(null);
+
+                          if (srcFolderId && srcFolderId !== folder.id && onReorderFolders) {
+                            await onReorderFolders(srcFolderId, folder.id);
+                          } else if (srcNoteId && onMoveNoteToFolder) {
+                            await onMoveNoteToFolder(srcNoteId, folder.id);
+                            // Auto-expand folder so user immediately sees the dropped note inside
+                            setCollapsedFolderIds((prev) => {
+                              const next = new Set(prev);
+                              next.delete(folder.id);
+                              return next;
+                            });
                           }
                         }}
                         onClick={() => toggleFolderCollapse(folder.id)}
                         className={`group flex items-center justify-between px-3 py-1.5 cursor-pointer text-xs rounded-md mx-1 transition ${
-                          isDragOver
-                            ? 'ring-2 ring-blue-500 bg-blue-50/70 dark:bg-blue-950/40'
+                          isDragOverAsContainer
+                            ? 'ring-2 ring-blue-500 bg-blue-100/80 dark:bg-blue-950/60 font-semibold'
+                            : isDragOverReorder
+                            ? 'border-t-2 border-blue-500 bg-blue-50/50 dark:bg-blue-950/30'
                             : 'text-stone-700 dark:text-zinc-300 hover:bg-stone-100/80 dark:hover:bg-zinc-900/60'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 truncate flex-1">
+                          <GripVertical className="w-3 h-3 text-stone-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-grab active:cursor-grabbing -mr-0.5" />
                           <span className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200">
                             {isCollapsed ? (
                               <ChevronRight className="w-3.5 h-3.5" />
@@ -850,11 +929,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="space-y-0.5">
                         {folderNotes.length === 0 ? (
                           <div
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.dataTransfer.dropEffect = 'move';
+                              setDragOverFolderId(folder.id);
+                            }}
+                            onDragLeave={(e) => {
+                              const related = e.relatedTarget as Node | null;
+                              if (!e.currentTarget.contains(related)) {
+                                if (dragOverFolderId === folder.id) setDragOverFolderId(null);
+                              }
+                            }}
+                            onDrop={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const srcNoteId = e.dataTransfer.getData('text/note-id') || draggedNoteId;
+                              setDragOverFolderId(null);
+                              setDraggedNoteId(null);
+                              if (srcNoteId && onMoveNoteToFolder) {
+                                await onMoveNoteToFolder(srcNoteId, folder.id);
+                              }
+                            }}
                             onClick={() => handleCreateNoteInFolder(folder.id)}
-                            className="pl-8 pr-3 py-1 text-[11px] text-stone-400 italic cursor-pointer hover:text-blue-600 transition flex items-center gap-1"
+                            className={`pl-8 pr-3 py-1.5 text-[11px] italic cursor-pointer transition flex items-center gap-1 rounded mx-1 ${
+                              isDragOverAsContainer
+                                ? 'ring-2 ring-blue-500 bg-blue-100/70 dark:bg-blue-950/50 text-blue-600 font-medium'
+                                : 'text-stone-400 hover:text-blue-600'
+                            }`}
                           >
                             <Plus className="w-3 h-3" />
-                            <span>Ajouter une note...</span>
+                            <span>Déposer une note ici ou cliquer pour créer...</span>
                           </div>
                         ) : (
                           folderNotes.map((note) => renderNoteItem(note, true))

@@ -84,6 +84,7 @@ export const App: React.FC = () => {
     createFolder,
     updateFolder,
     deleteFolder,
+    reorderFolders,
     createTag,
     deleteTag,
   } = useNotes(currentFilter, searchQuery, sortField, sortOrder);
@@ -370,6 +371,7 @@ export const App: React.FC = () => {
           onMoveNoteToFolder={handleMoveNoteToFolder}
           onUpdateNote={updateNote}
           onReorderNotes={reorderNotes}
+          onReorderFolders={reorderFolders}
           sortField={sortField}
           sortOrder={sortOrder}
           onChangeSort={(f, o) => {

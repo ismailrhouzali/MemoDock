@@ -115,6 +115,7 @@ export interface Folder {
   name: string;
   color?: string;
   icon?: string;
+  order?: number;
   createdAt: number;
   updatedAt: number;
 }

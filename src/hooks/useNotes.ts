@@ -78,7 +78,14 @@ export function useNotes(
     return allNotes;
   }, [currentFilter, searchQuery, sortField, sortOrder]);
 
-  const folders = useLiveQuery(() => db.folders.toArray(), []);
+  const folders = useLiveQuery(async () => {
+    const list = await db.folders.toArray();
+    return list.sort((a, b) => {
+      const orderA = a.order !== undefined ? a.order : a.createdAt;
+      const orderB = b.order !== undefined ? b.order : b.createdAt;
+      return orderA - orderB;
+    });
+  }, []);
   const tags = useLiveQuery(() => db.tags.toArray(), []);
 
   // Counts for sidebar badges
@@ -190,10 +197,12 @@ export function useNotes(
 
   const createFolder = async (name: string, color?: string): Promise<Folder> => {
     const now = Date.now();
+    const allFolders = await db.folders.toArray();
     const folder: Folder = {
       id: `folder-${now}-${Math.random().toString(36).substring(2, 7)}`,
       name: name.trim(),
       color: color || '#d97706',
+      order: allFolders.length,
       createdAt: now,
       updatedAt: now,
     };
@@ -260,6 +269,22 @@ export function useNotes(
     });
   };
 
+  const reorderFolders = async (draggedId: string, targetId: string) => {
+    const list = [...(folders || [])];
+    const draggedIdx = list.findIndex((f) => f.id === draggedId);
+    const targetIdx = list.findIndex((f) => f.id === targetId);
+    if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx) return;
+
+    const [dragged] = list.splice(draggedIdx, 1);
+    list.splice(targetIdx, 0, dragged);
+
+    await db.transaction('rw', db.folders, async () => {
+      for (let i = 0; i < list.length; i++) {
+        await db.folders.update(list[i].id, { order: i });
+      }
+    });
+  };
+
   return {
     notes: notes || [],
     folders: folders || [],
@@ -276,6 +301,7 @@ export function useNotes(
     createFolder,
     updateFolder,
     deleteFolder,
+    reorderFolders,
     createTag,
     deleteTag,
   };
