@@ -187,8 +187,9 @@ export const App: React.FC = () => {
     isHistoryOpen,
   ]);
 
-  const handleCreateNote = async () => {
-    const newNote = await createNote();
+  const handleCreateNote = async (initialProps?: Partial<Note>) => {
+    const props = initialProps && !('nativeEvent' in (initialProps as unknown as Record<string, unknown>)) ? initialProps : undefined;
+    const newNote = await createNote(props);
     setActiveNoteId(newNote.id);
   };
 
@@ -291,7 +292,7 @@ export const App: React.FC = () => {
         onSelectWorkspaceView={setWorkspaceView}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        onNewNote={handleCreateNote}
+        onNewNote={() => handleCreateNote()}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAI={() => setIsAIOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
@@ -423,7 +424,7 @@ export const App: React.FC = () => {
                 </p>
                 <button
                   type="button"
-                  onClick={handleCreateNote}
+                  onClick={() => handleCreateNote()}
                   className="px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
