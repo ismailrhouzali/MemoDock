@@ -80,12 +80,13 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
               )}
             </div>
 
-            <div className="min-w-0 flex-1">
-              <h4 className="font-semibold text-xs text-stone-900 dark:text-stone-100 truncate flex items-center gap-1.5">
+            <div className="min-w-0 flex-1 cursor-pointer" onClick={handleOpen} title="Ouvrir le lien dans un nouvel onglet">
+              <h4 className="font-semibold text-xs text-stone-900 dark:text-stone-100 truncate flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                 <span>{displayTitle}</span>
+                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 inline transition-opacity text-stone-400" />
               </h4>
               <div className="flex items-center gap-2 text-[10px] text-stone-400 dark:text-zinc-500 mt-0.5">
-                <span className="truncate max-w-[200px] text-stone-600 dark:text-zinc-400 font-mono">
+                <span className="truncate max-w-[200px] text-stone-600 dark:text-zinc-400 font-mono hover:underline">
                   {parsedHostname}
                 </span>
                 <span>•</span>

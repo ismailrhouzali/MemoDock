@@ -11,10 +11,10 @@ import TableCell from '@tiptap/extension-table-cell';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { common, createLowlight } from 'lowlight';
 
+import { EnhancedImageNode } from './extensions/EnhancedImage';
 import { MathBlock } from './extensions/MathBlock';
 import { MathInline } from './extensions/MathInline';
 import { MermaidBlock } from './extensions/MermaidBlock';
@@ -186,15 +186,16 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         multicolor: true,
       }),
       Link.configure({
-        openOnClick: false,
+        openOnClick: true,
+        linkOnPaste: true,
+        autolink: true,
         HTMLAttributes: {
-          class: 'text-amber-700 dark:text-amber-400 underline underline-offset-2 hover:opacity-80 cursor-pointer',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          class: 'text-blue-600 dark:text-blue-400 underline underline-offset-4 hover:text-blue-700 dark:hover:text-blue-300 font-medium cursor-pointer transition-colors',
         },
       }),
-      Image.configure({
-        inline: true,
-        allowBase64: true,
-      }),
+      EnhancedImageNode,
       Placeholder.configure({
         placeholder: 'Write your thoughts here... (Markdown supported, paste from ChatGPT/GitHub, type "/" or "#")',
       }),
@@ -303,18 +304,25 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
         return false;
       },
-      // Internal Link click navigation: notebook://note/{id}
+      // Link Click Handler: Internal Note links vs External hyperlinks
       handleClick: (_view, _pos, event) => {
         const target = event.target as HTMLElement;
         const link = target.closest('a');
         if (link) {
-          const href = link.getAttribute('href') || '';
+          const href = link.getAttribute('href') || link.href || '';
           if (href.startsWith('notebook://note/')) {
             event.preventDefault();
             const targetNoteId = href.replace('notebook://note/', '');
             if (onNavigateToNote) {
               onNavigateToNote(targetNoteId);
             }
+            return true;
+          }
+          // External or standard web link -> open in a new blank tab (_blank)
+          if (href && href !== '#' && !href.startsWith('javascript:')) {
+            event.preventDefault();
+            event.stopPropagation();
+            window.open(link.href || href, '_blank', 'noopener,noreferrer');
             return true;
           }
         }

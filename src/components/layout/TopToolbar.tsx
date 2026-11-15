@@ -25,6 +25,8 @@ import {
   MoreHorizontal,
   EyeOff,
   Eye,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { ThemeMode, WorkspaceView, WorkspaceLayoutPreset } from '../../db/types';
 
@@ -84,6 +86,17 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
+
+  const applyZoom = (level: number) => {
+    const clamped = Math.max(50, Math.min(200, level));
+    setZoomLevel(clamped);
+    const canvas = document.querySelector('.tiptap.ProseMirror') as HTMLElement;
+    if (canvas) {
+      (canvas.style as any).zoom = clamped === 100 ? '1' : `${clamped / 100}`;
+      canvas.style.transform = 'none';
+    }
+  };
 
   const newMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -414,6 +427,43 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                     <span>{autoHideNavbar ? 'Pin Navbar' : 'Auto-Hide Navbar'}</span>
                   </button>
                 )}
+
+                {/* Zoom Quick Controls */}
+                <div className="px-3 py-1.5 flex items-center justify-between text-stone-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-zinc-800/60 transition">
+                  <div className="flex items-center gap-1.5">
+                    <ZoomIn className="w-3.5 h-3.5 text-stone-500" />
+                    <span>Zoom</span>
+                    <span className="font-mono text-[10px] bg-stone-200/60 dark:bg-zinc-800 px-1.5 py-0.2 rounded font-semibold text-stone-600 dark:text-zinc-400">
+                      {zoomLevel}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => applyZoom(zoomLevel - 10)}
+                      className="p-1 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 transition"
+                      title="Zoom Out (-10%)"
+                    >
+                      <ZoomOut className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyZoom(100)}
+                      className="px-1 py-0.5 text-[9px] font-mono rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 transition"
+                      title="Reset to 100%"
+                    >
+                      100%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyZoom(zoomLevel + 10)}
+                      className="p-1 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 transition"
+                      title="Zoom In (+10%)"
+                    >
+                      <ZoomIn className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
 
                 {/* Theme Cycle */}
                 <button

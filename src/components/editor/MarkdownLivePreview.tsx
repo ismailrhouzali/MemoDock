@@ -145,6 +145,14 @@ export const MarkdownLivePreview: React.FC<MarkdownLivePreviewProps> = ({
             {/* Note Content Rendered */}
             <div
               className="prose prose-stone dark:prose-invert max-w-none tiptap-content-container"
+              onClick={(e) => {
+                const target = e.target as HTMLElement | null;
+                const link = target?.closest('a');
+                if (link && link.href) {
+                  e.preventDefault();
+                  window.open(link.href, '_blank', 'noopener,noreferrer');
+                }
+              }}
               dangerouslySetInnerHTML={{ __html: note.content || '<p class="text-stone-400 dark:text-zinc-600 italic">Note vide...</p>' }}
             />
           </div>

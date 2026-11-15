@@ -33,6 +33,12 @@ import {
   Trash2,
   Tag as TagIcon,
   HelpCircle,
+  Copy,
+  AlertCircle,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   AppSettings,
@@ -106,8 +112,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [isSyncingLocal, setIsSyncingLocal] = useState(false);
   const [isSyncingDrive, setIsSyncingDrive] = useState(false);
-  const [customDriveToken, setCustomDriveToken] = useState('');
+  const [customDriveToken, setCustomDriveToken] = useState(settings.googleDrive.accessToken || '');
   const [showCustomTokenInput, setShowCustomTokenInput] = useState(false);
+  const [driveClientId, setDriveClientId] = useState(settings.googleDrive.clientId || '');
+  const [driveHelpExpanded, setDriveHelpExpanded] = useState(!settings.googleDrive.isConnected);
+  const [copiedRedirect, setCopiedRedirect] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [shortcutFilter, setShortcutFilter] = useState<'all' | 'navigation' | 'editor' | 'workspace'>('all');
   const [isRestoringJson, setIsRestoringJson] = useState(false);
@@ -257,7 +266,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       setIsSyncingDrive(true);
       setSyncStatusMsg('Connecting to Google Drive...');
-      const { email } = await googleDriveService.connectAccount(true, customDriveToken);
+      const { email } = await googleDriveService.connectAccount(true, customDriveToken, driveClientId);
       setIsSyncingDrive(false);
       setLocalSettings((prev) => ({
         ...prev,
@@ -265,14 +274,99 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           ...prev.googleDrive,
           isConnected: true,
           userEmail: email || 'connected@gmail.com',
+          clientId: driveClientId || prev.googleDrive.clientId,
+          accessToken: customDriveToken || prev.googleDrive.accessToken,
           syncStatus: 'idle',
+          lastError: null,
         },
       }));
       setSyncStatusMsg(`Google Drive connected (${email || 'Google User'})`);
     } catch (err: any) {
       setIsSyncingDrive(false);
-      setSyncStatusMsg(`Drive connection: ${err.message || 'Cancelled'}`);
+      setSyncStatusMsg(`Google Drive: ${err.message || 'Connection failed'}`);
     }
+  };
+
+  const handleConnectWithClientId = async () => {
+    if (!driveClientId.trim()) {
+      setSyncStatusMsg('Veuillez renseigner votre Google Client ID.');
+      return;
+    }
+    try {
+      setIsSyncingDrive(true);
+      setSyncStatusMsg('Connexion OAuth Google (fenêtre popup)...');
+      const res = await googleDriveService.connectWithWebAuthFlow(driveClientId);
+      setIsSyncingDrive(false);
+      setLocalSettings((prev) => ({
+        ...prev,
+        googleDrive: {
+          ...prev.googleDrive,
+          isConnected: true,
+          userEmail: res.email,
+          clientId: driveClientId,
+          accessToken: res.token,
+          syncStatus: 'idle',
+          lastError: null,
+        },
+      }));
+      setSyncStatusMsg(`Google Drive connecté avec succès (${res.email})`);
+    } catch (err: any) {
+      setIsSyncingDrive(false);
+      setSyncStatusMsg(`Erreur OAuth: ${err.message || 'Échec de connexion'}`);
+    }
+  };
+
+  const handleConnectWithToken = async () => {
+    if (!customDriveToken.trim()) {
+      setSyncStatusMsg('Veuillez coller un jeton d\'accès Google valide.');
+      return;
+    }
+    try {
+      setIsSyncingDrive(true);
+      setSyncStatusMsg('Vérification du jeton Google...');
+      const res = await googleDriveService.connectWithToken(customDriveToken);
+      setIsSyncingDrive(false);
+      setLocalSettings((prev) => ({
+        ...prev,
+        googleDrive: {
+          ...prev.googleDrive,
+          isConnected: true,
+          userEmail: res.email,
+          accessToken: res.token,
+          syncStatus: 'idle',
+          lastError: null,
+        },
+      }));
+      setSyncStatusMsg(`Google Drive connecté avec succès (${res.email})`);
+    } catch (err: any) {
+      setIsSyncingDrive(false);
+      setSyncStatusMsg(`Erreur Jeton: ${err.message || 'Jeton invalide'}`);
+    }
+  };
+
+  const handleDownloadCloudBackup = async () => {
+    const allNotes = await db.notes.toArray();
+    const allFolders = await db.folders.toArray();
+    const allTags = await db.tags.toArray();
+    const backupData = {
+      app: 'MemoDock',
+      version: '2.0',
+      exportedAt: new Date().toISOString(),
+      notesCount: allNotes.length,
+      notes: allNotes,
+      folders: allFolders,
+      tags: allTags,
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `memodock-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setSyncStatusMsg('Archive de sauvegarde téléchargée (prête à être importée ou glissée sur Drive).');
   };
 
   const handleDisconnectDrive = async () => {
@@ -283,28 +377,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         ...prev.googleDrive,
         isConnected: false,
         userEmail: null,
+        accessToken: undefined,
+        syncStatus: 'idle',
+        lastError: null,
       },
     }));
-    setSyncStatusMsg('Google Drive disconnected.');
+    setSyncStatusMsg('Google Drive déconnecté.');
   };
 
   const handleSyncDriveNow = async () => {
     setIsSyncingDrive(true);
-    setSyncStatusMsg('Syncing notes with Google Drive...');
+    setSyncStatusMsg('Synchronisation en cours avec Google Drive...');
     const res = await googleDriveService.syncWithDrive();
     setIsSyncingDrive(false);
     if (res.success) {
-      setSyncStatusMsg(`Successfully synced ${res.uploadedCount} notes to Google Drive.`);
+      setSyncStatusMsg(`Synchronisation réussie : ${res.uploadedCount} notes sauvegardées sur Google Drive.`);
       setLocalSettings((prev) => ({
         ...prev,
         googleDrive: {
           ...prev.googleDrive,
           lastSyncTimestamp: Date.now(),
           syncStatus: 'success',
+          lastError: null,
         },
       }));
     } else {
-      setSyncStatusMsg(`Google Drive error: ${res.error || 'Sync failed'}`);
+      setSyncStatusMsg(`Erreur Google Drive : ${res.error || 'Échec de synchronisation'}`);
+      setLocalSettings((prev) => ({
+        ...prev,
+        googleDrive: {
+          ...prev.googleDrive,
+          syncStatus: 'error',
+          lastError: res.error || 'Sync failed',
+        },
+      }));
     }
   };
 
@@ -1166,88 +1272,125 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 7: GOOGLE DRIVE SYNC */}
+          {/* TAB 7: GOOGLE DRIVE SYNC & LOCAL EXTENSION GUIDE */}
           {activeTab === 'gdrive' && (
             <div className="space-y-4">
               <div>
-                <label className="block font-semibold text-stone-800 dark:text-stone-200 mb-1">
-                  Google Drive Cloud Sync
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-stone-800 dark:text-stone-200">
+                    Google Drive Cloud Sync
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleDownloadCloudBackup}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded bg-stone-100 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-stone-700 dark:text-zinc-300 transition"
+                    title="Télécharger une archive JSON complète pour Google Drive"
+                  >
+                    <Download className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Télécharger archive Cloud</span>
+                  </button>
+                </div>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500 mb-3">
-                  Backup your notes library to your private Google Drive folder to synchronize across computers.
+                  Sauvegardez l'ensemble de votre bibliothèque de notes directement sur votre Google Drive pour la synchroniser entre vos ordinateurs.
                 </p>
 
-                <div className="p-4 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3">
+                {/* Error Banner if sync failed */}
+                {localSettings.googleDrive.syncStatus === 'error' && localSettings.googleDrive.lastError && (
+                  <div className="mb-3 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
+                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold">Erreur de synchronisation Google Drive</p>
+                      <p className="text-[11px] mt-0.5 text-red-600 dark:text-red-400 font-mono">
+                        {localSettings.googleDrive.lastError}
+                      </p>
+                      <p className="text-[10px] mt-1 text-red-500 dark:text-red-400">
+                        Consultez le guide pas-à-pas ci-dessous pour configurer l'extension locale Chrome.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSyncDriveNow}
+                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-medium transition"
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                )}
+
+                {/* Main Card */}
+                <div className="p-4 bg-stone-50 dark:bg-zinc-950/60 rounded-xl border border-stone-200 dark:border-zinc-800 space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Cloud className="w-4 h-4 text-blue-500" />
-                      <span className="font-semibold text-xs text-stone-800 dark:text-zinc-200">
-                        {localSettings.googleDrive.isConnected
-                          ? `Connected: ${localSettings.googleDrive.userEmail || 'Google Drive'}`
-                          : 'Google Drive is Disconnected'}
-                      </span>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-500/20">
+                        <Cloud className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-stone-800 dark:text-zinc-200">
+                            {localSettings.googleDrive.isConnected
+                              ? localSettings.googleDrive.userEmail || 'Google Drive Connecté'
+                              : 'Google Drive déconnecté'}
+                          </span>
+                          {localSettings.googleDrive.isConnected ? (
+                            <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
+                              <Check className="w-2.5 h-2.5" />
+                              <span>Actif</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-stone-400 dark:text-zinc-500 bg-stone-200/50 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
+                              Non connecté
+                            </span>
+                          )}
+                        </div>
+                        {localSettings.googleDrive.lastSyncTimestamp && (
+                          <p className="text-[10px] text-stone-400 dark:text-zinc-500 mt-0.5">
+                            Dernière synchronisation :{' '}
+                            {new Date(localSettings.googleDrive.lastSyncTimestamp).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {localSettings.googleDrive.isConnected ? (
                       <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
-                          <Check className="w-3 h-3" />
-                          <span>Connected</span>
-                        </span>
+                        <button
+                          type="button"
+                          disabled={isSyncingDrive}
+                          onClick={handleSyncDriveNow}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDrive ? 'animate-spin' : ''}`} />
+                          <span>{isSyncingDrive ? 'Synchronisation...' : 'Synchroniser maintenant'}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={handleDisconnectDrive}
-                          className="px-2.5 py-1 text-xs text-red-600 hover:text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/40 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                          className="px-2.5 py-1.5 text-xs text-red-600 hover:text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/40 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition"
                         >
-                          Disconnect
+                          Déconnecter
                         </button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setShowCustomTokenInput(!showCustomTokenInput)}
-                          className="p-1.5 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 border border-stone-200 dark:border-zinc-800 rounded transition"
-                          title="Enter custom OAuth token"
-                        >
-                          <Key className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
                           disabled={isSyncingDrive}
                           onClick={handleConnectDrive}
                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                          title="Connexion standard Chrome Identity"
                         >
                           <Cloud className="w-3.5 h-3.5" />
-                          <span>Connect Google Drive</span>
+                          <span>Connexion rapide</span>
                         </button>
                       </div>
                     )}
                   </div>
 
-                  {showCustomTokenInput && !localSettings.googleDrive.isConnected && (
-                    <div className="pt-2 border-t border-stone-200/60 dark:border-zinc-800/60 flex items-center gap-2">
-                      <input
-                        type="password"
-                        placeholder="Paste Google Drive OAuth Token"
-                        value={customDriveToken}
-                        onChange={(e) => setCustomDriveToken(e.target.value)}
-                        className="flex-1 bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded px-2.5 py-1 text-xs text-stone-800 dark:text-zinc-200 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleConnectDrive}
-                        className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 text-white rounded text-xs font-medium"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  )}
-
+                  {/* Connected Configuration Options */}
                   {localSettings.googleDrive.isConnected && (
-                    <div className="pt-2 space-y-3 border-t border-stone-200/60 dark:border-zinc-800/60">
+                    <div className="pt-3 space-y-3 border-t border-stone-200/60 dark:border-zinc-800/60">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-stone-600 dark:text-zinc-400">Sync Folder Name</span>
+                        <span className="text-stone-600 dark:text-zinc-400 font-medium">Nom du dossier Google Drive</span>
                         <input
                           type="text"
                           value={localSettings.googleDrive.folderName}
@@ -1257,7 +1400,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               googleDrive: { ...prev.googleDrive, folderName: e.target.value },
                             }))
                           }
-                          className="bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded px-2 py-1 text-xs text-stone-800 dark:text-zinc-200 w-48"
+                          className="bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-stone-800 dark:text-zinc-200 w-52 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                          placeholder="MemoDock Data"
                         />
                       </div>
 
@@ -1274,20 +1418,204 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             }
                             className="accent-blue-600 rounded"
                           />
-                          <span className="text-stone-700 dark:text-zinc-300">
-                            Automatic background synchronization
+                          <span className="text-stone-700 dark:text-zinc-300 font-medium">
+                            Synchronisation automatique périodique
                           </span>
                         </label>
+                      </div>
+                    </div>
+                  )}
 
-                        <button
-                          type="button"
-                          disabled={isSyncingDrive}
-                          onClick={handleSyncDriveNow}
-                          className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDrive ? 'animate-spin' : ''}`} />
-                          <span>{isSyncingDrive ? 'Syncing...' : 'Sync Now'}</span>
-                        </button>
+                  {/* Connection Panels when Disconnected */}
+                  {!localSettings.googleDrive.isConnected && (
+                    <div className="pt-3 border-t border-stone-200/60 dark:border-zinc-800/60 space-y-3">
+                      {/* Method 1: Google Cloud Client ID (Web Auth Flow) */}
+                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border border-stone-200 dark:border-zinc-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-semibold text-xs text-stone-800 dark:text-zinc-200">
+                            <Key className="w-3.5 h-3.5 text-blue-500" />
+                            <span>Méthode 1 : ID Client OAuth Google Cloud (Recommandé en local)</span>
+                          </div>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">Popup OAuth</span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 dark:text-zinc-400">
+                          Saisissez votre ID Client OAuth créé sur Google Cloud Console pour autoriser MemoDock via la fenêtre officielle Google.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="text"
+                            value={driveClientId}
+                            onChange={(e) => setDriveClientId(e.target.value)}
+                            placeholder="ex: 123456789-abc.apps.googleusercontent.com"
+                            className="flex-1 bg-stone-50 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 dark:text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSyncingDrive}
+                            onClick={handleConnectWithClientId}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-xs shadow-sm transition disabled:opacity-50 flex-shrink-0"
+                          >
+                            Autoriser OAuth
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Method 2: Direct Token Input */}
+                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border border-stone-200 dark:border-zinc-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-semibold text-xs text-stone-800 dark:text-zinc-200">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Méthode 2 : Jeton d'accès direct (Google OAuth Playground)</span>
+                          </div>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">1 minute</span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 dark:text-zinc-400">
+                          Collez directement un jeton d'accès généré depuis l'outil officiel Google OAuth2 Playground sans créer de projet Cloud.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="password"
+                            value={customDriveToken}
+                            onChange={(e) => setCustomDriveToken(e.target.value)}
+                            placeholder="Coller le jeton (ya29.a0...)"
+                            className="flex-1 bg-stone-50 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-stone-800 dark:text-zinc-200 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSyncingDrive}
+                            onClick={handleConnectWithToken}
+                            className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-medium rounded-lg text-xs shadow-sm transition disabled:opacity-50 flex-shrink-0"
+                          >
+                            Appliquer le jeton
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Step-by-Step Help Guide (Manuel d'aide pour extension locale Chrome) */}
+                <div className="mt-4 border border-stone-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setDriveHelpExpanded(!driveHelpExpanded)}
+                    className="w-full p-3 flex items-center justify-between text-left hover:bg-stone-50 dark:hover:bg-zinc-800/60 transition"
+                  >
+                    <div className="flex items-center gap-2 font-semibold text-xs text-stone-800 dark:text-zinc-200">
+                      <HelpCircle className="w-4 h-4 text-amber-500" />
+                      <span>Guide pas-à-pas : Comment faire la sync avec l'extension Chrome locale</span>
+                    </div>
+                    {driveHelpExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-stone-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-stone-400" />
+                    )}
+                  </button>
+
+                  {driveHelpExpanded && (
+                    <div className="p-4 pt-1 border-t border-stone-100 dark:border-zinc-800 text-xs space-y-3.5 text-stone-700 dark:text-zinc-300 leading-relaxed">
+                      <div className="p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-lg text-[11px] text-amber-800 dark:text-amber-300">
+                        <strong>Pourquoi ce guide ?</strong> Lorsque vous chargez MemoDock en mode non empaqueté (<code className="font-mono">chrome://extensions</code>), Google bloque l'OAuth automatique car l'ID d'extension local n'est pas enregistré sur le Chrome Web Store. Deux solutions simples existent :
+                      </div>
+
+                      {/* Option 1 Instructions */}
+                      <div className="space-y-2">
+                        <h4 className="font-bold text-xs text-stone-900 dark:text-zinc-100 flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">1</span>
+                          <span>Option 1 : Configurer un ID Client Google Cloud (Permanent)</span>
+                        </h4>
+                        <ol className="list-decimal pl-6 space-y-1.5 text-[11px] text-stone-600 dark:text-zinc-400">
+                          <li>
+                            Rendez-vous sur{' '}
+                            <a
+                              href="https://console.cloud.google.com/apis/credentials"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline font-medium inline-flex items-center gap-0.5"
+                            >
+                              Google Cloud Console Credentials
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                            .
+                          </li>
+                          <li>
+                            Dans la bibliothèque d'API, activez la <strong>Google Drive API</strong>.
+                          </li>
+                          <li>
+                            Dans l'onglet <em>Écran de consentement OAuth</em>, choisissez <strong>Externe</strong>, nommez l'app <code>MemoDock</code>, et ajoutez votre adresse Gmail dans les <em>Utilisateurs test</em>.
+                          </li>
+                          <li>
+                            Dans <em>Identifiants</em>, cliquez sur <strong>Créer des identifiants</strong> &gt; <strong>ID client OAuth</strong>.
+                          </li>
+                          <li>
+                            Type d'application : choisissez <strong>Application Web</strong>.
+                          </li>
+                          <li>
+                            Dans <em>URI de redirection autorisés</em>, ajoutez exactement l'URL suivante de votre extension :
+                            <div className="flex items-center gap-2 mt-1.5 p-2 bg-stone-100 dark:bg-zinc-800 rounded border border-stone-200 dark:border-zinc-700 font-mono text-[11px] select-all">
+                              <span className="truncate flex-1 text-blue-600 dark:text-blue-400">
+                                {googleDriveService.getRedirectUrl()}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(googleDriveService.getRedirectUrl());
+                                  setCopiedRedirect(true);
+                                  setTimeout(() => setCopiedRedirect(false), 2000);
+                                }}
+                                className="px-2 py-0.5 bg-white dark:bg-zinc-700 border border-stone-200 dark:border-zinc-600 rounded text-[10px] font-sans font-medium hover:bg-stone-50 flex items-center gap-1"
+                              >
+                                {copiedRedirect ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                <span>{copiedRedirect ? 'Copié !' : 'Copier'}</span>
+                              </button>
+                            </div>
+                          </li>
+                          <li>
+                            Copiez l'<strong>ID Client</strong> généré (terminant par <code>.apps.googleusercontent.com</code>), collez-le dans le champ de la Méthode 1 ci-dessus, et cliquez sur <strong>Autoriser OAuth</strong>.
+                          </li>
+                        </ol>
+                      </div>
+
+                      {/* Option 2 Instructions */}
+                      <div className="space-y-2 pt-2 border-t border-stone-100 dark:border-zinc-800">
+                        <h4 className="font-bold text-xs text-stone-900 dark:text-zinc-100 flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px] font-bold">2</span>
+                          <span>Option 2 : Jeton Google OAuth2 Playground (Rapide, sans config)</span>
+                        </h4>
+                        <ol className="list-decimal pl-6 space-y-1.5 text-[11px] text-stone-600 dark:text-zinc-400">
+                          <li>
+                            Ouvrez{' '}
+                            <a
+                              href="https://developers.google.com/oauthplayground"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline font-medium inline-flex items-center gap-0.5"
+                            >
+                              Google OAuth 2.0 Playground
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                            .
+                          </li>
+                          <li>
+                            Dans la liste de gauche (Étape 1), faites défiler jusqu'à <strong>Drive API v3</strong> et cochez <code className="font-mono">https://www.googleapis.com/auth/drive.file</code>.
+                          </li>
+                          <li>
+                            Cliquez sur le bouton bleu <strong>Authorize APIs</strong> et connectez votre compte Google.
+                          </li>
+                          <li>
+                            À l'Étape 2, cliquez sur <strong>Exchange authorization code for tokens</strong>.
+                          </li>
+                          <li>
+                            Copiez la valeur du champ <strong>Access token</strong> (qui commence par <code className="font-mono">ya29.</code>), collez-la dans la Méthode 2 ci-dessus et cliquez sur <strong>Appliquer le jeton</strong>.
+                          </li>
+                        </ol>
+                      </div>
+
+                      {/* Fallback Option */}
+                      <div className="space-y-1 pt-2 border-t border-stone-100 dark:border-zinc-800">
+                        <p className="text-[11px] text-stone-500 dark:text-zinc-400">
+                          💡 <strong>Besoin d'une sauvegarde immédiate sans configuration ?</strong> Cliquez sur le bouton <span className="font-semibold text-blue-600">Télécharger archive Cloud</span> en haut à droite pour télécharger un fichier JSON complet que vous pouvez glisser manuellement dans n'importe quel dossier de votre Google Drive ou restaurer à tout moment via l'onglet <em>Stockage & Corbeille</em>.
+                        </p>
                       </div>
                     </div>
                   )}

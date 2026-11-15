@@ -36,6 +36,9 @@ import {
   MessageSquareHeart,
   ExternalLink,
   Laptop,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 import { Note, ThemeMode } from '../../db/types';
 import { exportService } from '../../services/exportService';
@@ -117,13 +120,29 @@ export const MinimalistEditorHeader: React.FC<MinimalistEditorHeaderProps> = ({
 
   // Zoom control
   const applyZoom = (level: number) => {
-    setZoomLevel(level);
+    const clamped = Math.max(50, Math.min(200, level));
+    setZoomLevel(clamped);
     const canvas = document.querySelector('.tiptap.ProseMirror') as HTMLElement;
     if (canvas) {
-      canvas.style.transform = level === 100 ? 'none' : `scale(${level / 100})`;
-      canvas.style.transformOrigin = 'top center';
+      // Native zoom in Blink engines (Chrome/Edge extensions) scales text, tables, and images crisply
+      (canvas.style as any).zoom = clamped === 100 ? '1' : `${clamped / 100}`;
+      canvas.style.transform = 'none';
     }
-    setActiveSubmenu(null);
+  };
+
+  const handleZoomIn = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    applyZoom(zoomLevel + 10);
+  };
+
+  const handleZoomOut = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    applyZoom(zoomLevel - 10);
+  };
+
+  const handleResetZoom = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    applyZoom(100);
   };
 
   // Downloads
@@ -715,34 +734,72 @@ export const MinimalistEditorHeader: React.FC<MinimalistEditorHeaderProps> = ({
               )}
             </div>
 
-            {/* Zoom > */}
+            {/* Zoom In & Zoom Out Quick Controls */}
             <div
-              className="relative group"
+              className="relative group px-3 py-1.5 flex items-center justify-between hover:bg-stone-100 dark:hover:bg-zinc-800 transition"
               onMouseEnter={() => setActiveSubmenu('zoom')}
             >
-              <button
-                type="button"
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-stone-100 dark:hover:bg-zinc-800 transition"
-              >
-                <div className="flex items-center gap-2">
-                  <Maximize2 className="w-3.5 h-3.5 text-stone-500" />
-                  <span>Zoom ({zoomLevel}%)</span>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-stone-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                <ZoomIn className="w-3.5 h-3.5 text-stone-500" />
+                <span className="font-medium">Zoom</span>
+                <span className="font-mono text-[10px] bg-stone-200/60 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-stone-700 dark:text-zinc-300 font-semibold">
+                  {zoomLevel}%
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {/* Direct Zoom Out */}
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="p-1 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 transition"
+                  title="Zoom Out (-10%)"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Reset to 100% */}
+                <button
+                  type="button"
+                  onClick={handleResetZoom}
+                  className="px-1.5 py-0.5 text-[10px] font-mono rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 transition"
+                  title="Reset to 100%"
+                >
+                  100%
+                </button>
+
+                {/* Direct Zoom In */}
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="p-1 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 transition"
+                  title="Zoom In (+10%)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+
+                <ChevronRight className="w-3.5 h-3.5 text-stone-400 ml-0.5" />
+              </div>
 
               {activeSubmenu === 'zoom' && (
-                <div className="absolute right-full top-0 mr-1 w-32 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float py-1.5 z-50">
-                  {[90, 100, 110, 125].map((lvl) => (
+                <div className="absolute right-full top-0 mr-1 w-36 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float py-1.5 z-50">
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-stone-400 font-semibold">
+                    Presets
+                  </div>
+                  {[75, 90, 100, 110, 125, 150].map((lvl) => (
                     <button
                       key={lvl}
                       type="button"
-                      onClick={() => applyZoom(lvl)}
-                      className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 ${
+                      onClick={() => {
+                        applyZoom(lvl);
+                        setIsMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-between ${
                         zoomLevel === lvl ? 'font-bold text-blue-600 dark:text-blue-400' : ''
                       }`}
                     >
-                      {lvl}%
+                      <span>{lvl}%</span>
+                      {zoomLevel === lvl && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
                   ))}
                 </div>

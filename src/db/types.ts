@@ -214,6 +214,8 @@ export interface GoogleDriveSettings {
   lastSyncTimestamp: number | null;
   syncStatus: 'idle' | 'syncing' | 'success' | 'error';
   lastError: string | null;
+  clientId?: string;
+  accessToken?: string;
 }
 
 export interface LocalStorageFolderSettings {
