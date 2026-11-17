@@ -195,7 +195,10 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           class: 'text-blue-600 dark:text-blue-400 underline underline-offset-4 hover:text-blue-700 dark:hover:text-blue-300 font-medium cursor-pointer transition-colors',
         },
       }),
-      EnhancedImageNode,
+      EnhancedImageNode.configure({
+        allowBase64: true,
+        inline: false,
+      }),
       Placeholder.configure({
         placeholder: 'Write your thoughts here... (Markdown supported, paste from ChatGPT/GitHub, type "/" or "#")',
       }),
@@ -287,10 +290,62 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           return false;
         }
 
+        // 1. Direct Image Clipboard Handler (Screenshots, Snipping Tool, Copied Web Images)
+        const items = event.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.startsWith('image/')) {
+              const file = item.getAsFile();
+              if (file) {
+                event.preventDefault();
+                const reader = new FileReader();
+                reader.onload = (readerEvent) => {
+                  const base64 = readerEvent.target?.result as string;
+                  if (base64) {
+                    const node = view.state.schema.nodes.image.create({
+                      src: base64,
+                      width: '100%',
+                      alignment: 'center',
+                    });
+                    const tr = view.state.tr.replaceSelectionWith(node);
+                    view.dispatch(tr);
+                  }
+                };
+                reader.readAsDataURL(file);
+                return true;
+              }
+            }
+          }
+        }
+
+        // Check clipboard files for image
+        if (event.clipboardData?.files && event.clipboardData.files.length > 0) {
+          const file = event.clipboardData.files[0];
+          if (file.type.startsWith('image/')) {
+            event.preventDefault();
+            const reader = new FileReader();
+            reader.onload = (readerEvent) => {
+              const base64 = readerEvent.target?.result as string;
+              if (base64) {
+                const node = view.state.schema.nodes.image.create({
+                  src: base64,
+                  width: '100%',
+                  alignment: 'center',
+                });
+                const tr = view.state.tr.replaceSelectionWith(node);
+                view.dispatch(tr);
+              }
+            };
+            reader.readAsDataURL(file);
+            return true;
+          }
+        }
+
         // Process clipboard via Universal Smart Ingestion Pipeline
         const result = processUniversalClipboard(event);
         if (result.type === 'image') {
-          return false; // let image handler or file reader proceed
+          return false; // already handled above if present
         }
 
         if (result.html && result.html.trim().length > 0) {

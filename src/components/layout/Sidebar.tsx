@@ -170,18 +170,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteTitle, setEditingNoteTitle] = useState('');
   const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
-  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
+  // Folders are closed (collapsed) by default
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
 
   // Auto-expand folder when active note is inside it
   useEffect(() => {
     if (activeNoteId) {
       const active = notes.find((n) => n.id === activeNoteId);
-      if (active?.folderId && collapsedFolderIds.has(active.folderId)) {
-        setCollapsedFolderIds((prev) => {
-          const next = new Set(prev);
-          next.delete(active.folderId!);
-          return next;
-        });
+      if (active?.folderId && !expandedFolderIds.has(active.folderId)) {
+        setExpandedFolderIds((prev) => new Set(prev).add(active.folderId!));
       }
     }
   }, [activeNoteId]);
@@ -358,7 +355,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     const toggleFolderCollapse = (folderId: string) => {
-      setCollapsedFolderIds((prev) => {
+      setExpandedFolderIds((prev) => {
         const next = new Set(prev);
         if (next.has(folderId)) {
           next.delete(folderId);
@@ -370,11 +367,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
 
     const handleCreateNoteInFolder = async (folderId: string) => {
-      setCollapsedFolderIds((prev) => {
-        const next = new Set(prev);
-        next.delete(folderId);
-        return next;
-      });
+      setExpandedFolderIds((prev) => new Set(prev).add(folderId));
       await onCreateNote({ folderId });
     };
 
@@ -473,11 +466,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
               // 3. If target note is in a folder, expand it
               if (note.folderId) {
-                setCollapsedFolderIds((prev) => {
-                  const next = new Set(prev);
-                  next.delete(note.folderId!);
-                  return next;
-                });
+                setExpandedFolderIds((prev) => new Set(prev).add(note.folderId!));
               }
             }
           }}
@@ -756,7 +745,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <>
               {/* Folders and their nested notes */}
               {folders.map((folder) => {
-                const isCollapsed = collapsedFolderIds.has(folder.id);
+                const isCollapsed = !expandedFolderIds.has(folder.id);
                 const isDragOverAsContainer = dragOverFolderId === folder.id;
                 const isDragOverReorder = dragOverReorderFolderId === folder.id;
                 const isEditing = editingFolderId === folder.id;
@@ -846,11 +835,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           } else if (srcNoteId && onMoveNoteToFolder) {
                             await onMoveNoteToFolder(srcNoteId, folder.id);
                             // Auto-expand folder so user immediately sees the dropped note inside
-                            setCollapsedFolderIds((prev) => {
-                              const next = new Set(prev);
-                              next.delete(folder.id);
-                              return next;
-                            });
+                            setExpandedFolderIds((prev) => new Set(prev).add(folder.id));
                           }
                         }}
                         onClick={() => toggleFolderCollapse(folder.id)}

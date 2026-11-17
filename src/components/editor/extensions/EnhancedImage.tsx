@@ -407,6 +407,23 @@ const ImageNodeComponent: React.FC<NodeViewProps> = ({
 };
 
 export const EnhancedImageNode = Image.extend({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      inline: false,
+      allowBase64: true,
+      HTMLAttributes: {},
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'img[src]',
+      },
+    ];
+  },
+
   addAttributes() {
     return {
       ...this.parent?.(),
