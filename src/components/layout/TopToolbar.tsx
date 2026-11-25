@@ -15,10 +15,11 @@ import {
   ExternalLink,
   BookOpen,
   LayoutTemplate,
-  Bookmark,
+  Database,
+  LayoutDashboard,
   FileText,
   Files,
-  FileSpreadsheet,
+  Share2,
   MessageSquareHeart,
   ChevronDown,
   Columns,
@@ -38,12 +39,11 @@ interface TopToolbarProps {
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   onNewNote: () => void;
-  onNewResource?: () => void;
   onUploadPdf?: () => void;
-  onNewSpreadsheet?: () => void;
   onOpenSearch: () => void;
   onOpenAI: () => void;
   onOpenExport: () => void;
+  onOpenShare?: () => void;
   onOpenSettings: () => void;
   onOpenTemplates?: () => void;
   focusMode: boolean;
@@ -56,6 +56,7 @@ interface TopToolbarProps {
   onToggleSplitWorkspace?: () => void;
   autoHideNavbar?: boolean;
   onToggleAutoHideNavbar?: () => void;
+  showDashboard?: boolean;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -64,24 +65,24 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   isSidebarOpen,
   onToggleSidebar,
   onNewNote,
-  onNewResource,
   onUploadPdf,
-  onNewSpreadsheet,
   onOpenSearch,
   onOpenAI,
   onOpenExport,
+  onOpenShare,
   onOpenSettings,
   onOpenTemplates,
   focusMode,
   onToggleFocusMode,
   theme,
   onCycleTheme,
-  layoutPreset = 'balanced',
+  layoutPreset = 'minimal',
   onSelectLayoutPreset,
   isSplitWorkspace = false,
   onToggleSplitWorkspace,
   autoHideNavbar = false,
   onToggleAutoHideNavbar,
+  showDashboard = false,
 }) => {
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -170,8 +171,24 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             </span>
           </div>
 
-          {/* Module Navigation Tabs */}
+          {/* Module Navigation Tabs (Resources & Sheets removed; Databases & optional Dashboard added) */}
           <div className="flex items-center p-0.5 bg-stone-100 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800 rounded-lg text-xs mx-1">
+            {showDashboard && (
+              <button
+                type="button"
+                onClick={() => onSelectWorkspaceView('dashboard')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium ${
+                  workspaceView === 'dashboard'
+                    ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-2xs font-semibold'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+                title="Dashboard Overview"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => onSelectWorkspaceView('notes')}
@@ -188,16 +205,16 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
 
             <button
               type="button"
-              onClick={() => onSelectWorkspaceView('resources')}
+              onClick={() => onSelectWorkspaceView('databases')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium ${
-                workspaceView === 'resources'
-                  ? 'bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-400 shadow-2xs font-semibold'
+                workspaceView === 'databases'
+                  ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-2xs font-semibold'
                   : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
               }`}
-              title="Resource Library"
+              title="Databases (Table, Board, Gallery & XLSX/CSV Import)"
             >
-              <Bookmark className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Resources</span>
+              <Database className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Databases</span>
             </button>
 
             <button
@@ -213,20 +230,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               <Files className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">PDFs</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => onSelectWorkspaceView('spreadsheets')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium ${
-                workspaceView === 'spreadsheets'
-                  ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-2xs font-semibold'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-              title="Spreadsheets (CSV/XLSX)"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sheets</span>
-            </button>
           </div>
 
           {/* Primary Action Button */}
@@ -235,10 +238,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (workspaceView === 'notes') onNewNote();
-                  else if (workspaceView === 'resources' && onNewResource) onNewResource();
-                  else if (workspaceView === 'documents' && onUploadPdf) onUploadPdf();
-                  else if (workspaceView === 'spreadsheets' && onNewSpreadsheet) onNewSpreadsheet();
+                  if (workspaceView === 'documents' && onUploadPdf) onUploadPdf();
                   else onNewNote();
                 }}
                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition active:scale-95"
@@ -246,13 +246,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">
-                  {workspaceView === 'notes'
-                    ? 'New Note'
-                    : workspaceView === 'resources'
-                    ? 'Resource'
-                    : workspaceView === 'documents'
-                    ? 'PDF'
-                    : 'Sheet'}
+                  {workspaceView === 'documents' ? 'PDF' : 'New Note'}
                 </span>
               </button>
 
@@ -357,6 +351,18 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           >
             {focusMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
+
+          {/* Share Note */}
+          {onOpenShare && workspaceView === 'notes' && (
+            <button
+              type="button"
+              onClick={onOpenShare}
+              className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-stone-100 dark:hover:bg-zinc-900 rounded-md transition"
+              title="Share Note"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Settings Modal */}
           <button

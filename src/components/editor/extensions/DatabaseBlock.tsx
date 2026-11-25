@@ -1,0 +1,143 @@
+import { Node, mergeAttributes } from '@tiptap/core';
+import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewProps } from '@tiptap/react';
+import React, { useEffect, useState } from 'react';
+import { db } from '../../../db/db';
+import { NoteDatabase } from '../../../db/types';
+import { Database, Plus, Trash2 } from 'lucide-react';
+
+const DatabaseBlockComponent: React.FC<NodeViewProps> = ({ node, deleteNode }) => {
+  const { databaseId, title } = node.attrs;
+  const [database, setDatabase] = useState<NoteDatabase | null>(null);
+
+  useEffect(() => {
+    if (databaseId) {
+      db.databases.get(databaseId).then((res) => {
+        if (res) setDatabase(res);
+      });
+    }
+  }, [databaseId]);
+
+  const handleQuickAddRow = async () => {
+    if (!database) return;
+    const now = Date.now();
+    const newRow = {
+      id: `row-${now}`,
+      cells: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    const updatedRows = [...database.rows, newRow];
+    await db.databases.update(database.id, { rows: updatedRows, updatedAt: now });
+    setDatabase({ ...database, rows: updatedRows });
+  };
+
+  return (
+    <NodeViewWrapper className="my-3 select-none">
+      <div className="border border-stone-200/80 dark:border-zinc-800 rounded-xl overflow-hidden bg-white/80 dark:bg-zinc-900/60 shadow-2xs">
+        <div className="flex items-center justify-between px-3 py-2 bg-stone-50/70 dark:bg-zinc-950/40 border-b border-stone-200/60 dark:border-zinc-800">
+          <div className="flex items-center gap-2 text-xs font-semibold text-stone-800 dark:text-zinc-200">
+            <Database className="w-4 h-4 text-emerald-600" />
+            <span>{database?.title || title || 'Embedded Database'}</span>
+            {database && (
+              <span className="text-[10px] font-mono text-stone-400">
+                ({database.rows.length} rows)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {database && (
+              <button
+                type="button"
+                onClick={handleQuickAddRow}
+                className="px-2 py-0.5 text-[11px] rounded bg-stone-200/60 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Row</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={deleteNode}
+              className="p-1 text-stone-400 hover:text-red-500 rounded"
+              title="Remove database embed"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {database ? (
+          <div className="overflow-x-auto max-h-64">
+            <table className="w-full border-collapse text-[11px]">
+              <thead>
+                <tr className="bg-stone-50/40 dark:bg-zinc-900 border-b border-stone-200/60 dark:border-zinc-800">
+                  {database.columns.map((col) => (
+                    <th key={col.id} className="text-left px-3 py-1.5 font-semibold text-stone-600 dark:text-zinc-400">
+                      {col.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {database.rows.slice(0, 8).map((row) => (
+                  <tr key={row.id} className="border-b border-stone-100 dark:border-zinc-800/60">
+                    {database.columns.map((col) => (
+                      <td key={col.id} className="px-3 py-1.5 text-stone-700 dark:text-zinc-300">
+                        {String(row.cells[col.id] ?? '—')}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-4 text-xs text-stone-400 italic">Database not found or empty.</div>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+};
+
+export const DatabaseBlockNode = Node.create({
+  name: 'databaseBlock',
+  group: 'block',
+  atom: true,
+
+  addAttributes() {
+    return {
+      databaseId: { default: '' },
+      title: { default: 'Database' },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-type="database-block"]',
+        getAttrs: (el) => {
+          if (typeof el === 'string') return {};
+          return {
+            databaseId: el.getAttribute('data-database-id') || '',
+            title: el.getAttribute('data-title') || 'Database',
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        'data-type': 'database-block',
+        'data-database-id': HTMLAttributes.databaseId,
+        'data-title': HTMLAttributes.title,
+      }),
+    ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(DatabaseBlockComponent);
+  },
+});

@@ -783,9 +783,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {[
                     {
                       id: 'minimal' as WorkspaceLayoutPreset,
-                      title: 'Minimalist',
+                      title: 'Minimalist (Default)',
                       icon: Feather,
-                      desc: 'TabNotebook clean digital paper, auto-title, no clutter',
+                      desc: 'Clean digital paper, zero clutter, gray title suggestion',
                     },
                     {
                       id: 'balanced' as WorkspaceLayoutPreset,
@@ -931,6 +931,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Dashboard Activation Toggle */}
+              <div className="border-t border-stone-100 dark:border-zinc-800 pt-4 flex items-center justify-between">
+                <div>
+                  <label className="block font-semibold text-stone-800 dark:text-stone-200">
+                    Workspace Dashboard
+                  </label>
+                  <p className="text-[11px] text-stone-400 dark:text-zinc-500">
+                    Enable or disable the Dashboard overview tab in the top navigation bar.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!localSettings.showDashboard}
+                    onChange={(e) => updateSetting('showDashboard', e.target.checked)}
+                    className="accent-blue-600 rounded w-4 h-4"
+                  />
+                  <span className="text-xs font-medium text-stone-700 dark:text-stone-300">
+                    {localSettings.showDashboard ? 'Active' : 'Disabled'}
+                  </span>
+                </label>
               </div>
             </div>
           )}

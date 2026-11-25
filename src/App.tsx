@@ -23,13 +23,15 @@ import { TopToolbar } from './components/layout/TopToolbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { StatusBar } from './components/layout/StatusBar';
 import { TipTapEditor } from './components/editor/TipTapEditor';
-import { ResourceGrid } from './components/resources/ResourceGrid';
 import { DocumentHub } from './components/pdf/DocumentHub';
-import { SpreadsheetHub } from './components/spreadsheet/SpreadsheetHub';
+import { DatabaseView } from './components/database/DatabaseView';
+import { DashboardView } from './components/dashboard/DashboardView';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 import { SettingsModal } from './components/modals/SettingsModal';
 import { AIAssistantModal } from './components/modals/AIAssistantModal';
 import { ExportModal } from './components/modals/ExportModal';
+import { ShareModal } from './components/modals/ShareModal';
 import { ShortcutsModal } from './components/modals/ShortcutsModal';
 import { SearchModal } from './components/modals/SearchModal';
 import { TemplatesModal } from './components/modals/TemplatesModal';
@@ -58,6 +60,7 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
@@ -66,6 +69,7 @@ export const App: React.FC = () => {
 
   // Theme hook
   const { theme, setTheme } = useTheme();
+  const databases = useLiveQuery(() => db.databases.toArray(), []) || [];
 
   // Notes data layer hook
   const {
@@ -297,13 +301,14 @@ export const App: React.FC = () => {
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAI={() => setIsAIOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
+        onOpenShare={() => setIsShareOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
         focusMode={focusMode}
         onToggleFocusMode={() => setFocusMode(!focusMode)}
         theme={theme}
         onCycleTheme={cycleTheme}
-        layoutPreset={settings.editorLayout?.mode || 'balanced'}
+        layoutPreset={settings.editorLayout?.mode || 'minimal'}
         onSelectLayoutPreset={handleSelectLayoutPreset}
         isSplitWorkspace={splitWorkspace}
         onToggleSplitWorkspace={() => {
@@ -317,20 +322,39 @@ export const App: React.FC = () => {
           setAutoHideNavbar(next);
           settingsStorage.set({ autoHideNavbar: next });
         }}
+        showDashboard={!!settings.showDashboard}
       />
 
       {/* Main Workspace Body */}
-      {workspaceView === 'resources' ? (
-        <ResourceGrid />
-      ) : workspaceView === 'documents' ? (
-        <DocumentHub
-          onNavigateToNote={(targetId) => {
-            setActiveNoteId(targetId);
+      {workspaceView === 'dashboard' && settings.showDashboard ? (
+        <DashboardView
+          notes={notes}
+          folders={folders}
+          databases={databases}
+          onSelectNote={(n) => setActiveNoteId(n.id)}
+          onCreateNote={() => handleCreateNote()}
+          onNavigateView={setWorkspaceView}
+          onDisableDashboard={async () => {
+            await handleSaveSettings({ showDashboard: false });
             setWorkspaceView('notes');
           }}
         />
-      ) : workspaceView === 'spreadsheets' ? (
-        <SpreadsheetHub
+      ) : workspaceView === 'databases' ? (
+        <DatabaseView
+          onInsertDatabaseInNote={(dbItem) => {
+            if (activeNote) {
+              handleUpdateActiveNote({
+                content:
+                  (activeNote.content || '') +
+                  `<div data-type="database-block" data-database-id="${dbItem.id}" data-title="${dbItem.title}"></div>`,
+                updatedAt: Date.now(),
+              });
+              setWorkspaceView('notes');
+            }
+          }}
+        />
+      ) : workspaceView === 'documents' ? (
+        <DocumentHub
           onNavigateToNote={(targetId) => {
             setActiveNoteId(targetId);
             setWorkspaceView('notes');
@@ -414,6 +438,15 @@ export const App: React.FC = () => {
                 onStatsChange={setStats}
                 onOpenTemplates={() => setIsTemplatesOpen(true)}
                 onOpenHistory={() => setIsHistoryOpen(true)}
+                onCreateSubPage={async (parentId) => {
+                  const sub = await createNote({
+                    title: 'Untitled Sub-page',
+                    parentNoteId: parentId,
+                    folderId: activeNote.folderId,
+                  });
+                  setActiveNoteId(sub.id);
+                }}
+                onOpenShare={() => setIsShareOpen(true)}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 dark:text-zinc-600 select-none">
@@ -476,30 +509,16 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setSplitRightView('resources');
-                      settingsStorage.set({ splitRightView: 'resources' });
+                      setSplitRightView('databases');
+                      settingsStorage.set({ splitRightView: 'databases' });
                     }}
                     className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
-                      splitRightView === 'resources'
+                      splitRightView === 'databases'
                         ? 'bg-blue-600 text-white font-semibold shadow-xs'
                         : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
                     }`}
                   >
-                    Liens
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSplitRightView('spreadsheets');
-                      settingsStorage.set({ splitRightView: 'spreadsheets' });
-                    }}
-                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
-                      splitRightView === 'spreadsheets'
-                        ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                        : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-                    }`}
-                  >
-                    Tableurs
+                    Databases
                   </button>
                 </div>
                 <button
@@ -534,14 +553,8 @@ export const App: React.FC = () => {
                       <p className="text-xs">Sélectionnez une note pour afficher l'aperçu Markdown.</p>
                     </div>
                   )
-                ) : splitRightView === 'resources' ? (
-                  <ResourceGrid />
-                ) : splitRightView === 'spreadsheets' ? (
-                  <SpreadsheetHub
-                    onNavigateToNote={(targetId) => {
-                      setActiveNoteId(targetId);
-                    }}
-                  />
+                ) : splitRightView === 'databases' ? (
+                  <DatabaseView />
                 ) : (
                   <DocumentHub
                     onNavigateToNote={(targetId) => {
@@ -631,6 +644,13 @@ export const App: React.FC = () => {
           activeNote={activeNote}
         />
       )}
+
+      {/* Share Note Modal */}
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        note={activeNote}
+      />
 
       {/* Shortcuts Modal */}
       <ShortcutsModal

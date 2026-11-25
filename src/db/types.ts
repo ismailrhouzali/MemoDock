@@ -14,6 +14,7 @@ export interface Note {
   trashedAt?: number | null;
   sourceUrl?: string;
   sourceTitle?: string;
+  parentNoteId?: string | null; // Parent note ID for nested sub-pages
   internalLinks?: string[]; // Note IDs or titles referenced via [[title]]
   backlinks?: string[]; // Note IDs that link to this note
   isAutoTitle?: boolean; // Whether note title was automatically extracted from content
@@ -64,7 +65,36 @@ export interface ResourceCollection {
   createdAt: number;
 }
 
-export type WorkspaceView = 'notes' | 'resources' | 'documents' | 'spreadsheets';
+export type WorkspaceView = 'notes' | 'dashboard' | 'databases' | 'documents';
+
+export type DatabaseColumnType = 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'url';
+export type DatabaseViewType = 'table' | 'board' | 'gallery';
+
+export interface DatabaseColumn {
+  id: string;
+  name: string;
+  type: DatabaseColumnType;
+  options?: string[]; // For 'select' columns (used for Kanban Board grouping too)
+}
+
+export interface DatabaseRow {
+  id: string;
+  cells: Record<string, string | number | boolean>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface NoteDatabase {
+  id: string;
+  title: string;
+  description?: string;
+  columns: DatabaseColumn[];
+  rows: DatabaseRow[];
+  defaultView: DatabaseViewType;
+  noteId?: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface SpreadsheetSheet {
   id: string;
@@ -270,6 +300,7 @@ export interface AppSettings {
   autoHideNavbar?: boolean;
   splitWorkspace?: boolean;
   splitRightView?: WorkspaceView | 'markdown';
+  showDashboard?: boolean;
 }
 
 export type ViewFilter = 

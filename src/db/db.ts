@@ -11,6 +11,7 @@ import {
   Resource,
   ResourceCollection,
   Spreadsheet,
+  NoteDatabase,
   WorkspaceProfile,
   KeyboardShortcut,
 } from './types';
@@ -26,6 +27,7 @@ export class NotebookDB extends Dexie {
   resources!: Table<Resource, string>;
   collections!: Table<ResourceCollection, string>;
   spreadsheets!: Table<Spreadsheet, string>;
+  databases!: Table<NoteDatabase, string>;
 
   constructor() {
     super('NotebookDB');
@@ -71,6 +73,21 @@ export class NotebookDB extends Dexie {
       resources: 'id, url, title, domain, type, collection, *tags, isPinned, isFavorite, isArchived, isTrash, createdAt, lastOpenedAt',
       collections: 'id, name, createdAt',
       spreadsheets: 'id, title, collection, *tags, noteId, isPinned, isFavorite, isArchived, isTrash, createdAt, updatedAt',
+    });
+
+    // Version 5: Databases Module & Nested Sub-pages
+    this.version(5).stores({
+      notes: 'id, title, createdAt, updatedAt, folderId, parentNoteId, *tags, isPinned, isFavorite, isArchived, isTrash, *internalLinks, *backlinks',
+      folders: 'id, name, createdAt, updatedAt',
+      tags: 'id, &name',
+      attachments: 'id, noteId, name, type, createdAt',
+      noteVersions: 'id, noteId, createdAt',
+      templates: 'id, title, category, isBuiltin',
+      conflicts: 'id, noteId, detectedAt, resolved',
+      resources: 'id, url, title, domain, type, collection, *tags, isPinned, isFavorite, isArchived, isTrash, createdAt, lastOpenedAt',
+      collections: 'id, name, createdAt',
+      spreadsheets: 'id, title, collection, *tags, noteId, isPinned, isFavorite, isArchived, isTrash, createdAt, updatedAt',
+      databases: 'id, title, noteId, createdAt, updatedAt',
     });
   }
 }
@@ -215,8 +232,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiApiKey: '',
   aiModel: 'gemini-1.5-flash',
 
-  // Note List Display Settings
-  noteListMode: 'detailed',
+  // Note List Display Settings (Minimalist active by default)
+  noteListMode: 'minimal',
   sidebarWidth: 260,
   outlinePosition: 'right',
   outlineWidth: 256,
@@ -237,16 +254,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
     mode: 'full',
   },
 
-  // Editor Minimal & Focus Settings
+  // Editor Minimal & Focus Settings (Minimalist active by default)
   editorLayout: {
-    mode: 'standard',
+    mode: 'minimal',
     showToolbar: true,
     showWordCount: true,
     showCharCount: true,
     showReadingTime: true,
-    showModifiedDate: true,
-    showBreadcrumbs: true,
-    showTableOfContents: true,
+    showModifiedDate: false,
+    showBreadcrumbs: false,
+    showTableOfContents: false,
     tocCollapsed: false,
     tocLevel: 'h3',
   },
@@ -254,7 +271,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Distraction-Free & Split Mode
   autoHideNavbar: false,
   splitWorkspace: false,
-  splitRightView: 'documents',
+  splitRightView: 'markdown',
+  showDashboard: false,
 
   // Storage Mode
   storageMode: 'browser',

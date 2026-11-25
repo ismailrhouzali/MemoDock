@@ -36,9 +36,12 @@ export const exportService = {
     md = md.replace(/<div data-type="math-block" data-latex="([^"]*)">[\s\S]*?<\/div>/gi, (_, latex) => `$$\n${latex}\n$$\n\n`);
     md = md.replace(/<span data-type="math-inline" data-latex="([^"]*)">[\s\S]*?<\/span>/gi, (_, latex) => `$${latex}$`);
     md = md.replace(/<div data-type="mermaid-block" data-code="([^"]*)">[\s\S]*?<\/div>/gi, (_, code) => `\`\`\`mermaid\n${code}\n\`\`\`\n\n`);
-    // PDF attachment & Link card blocks & Spreadsheet blocks
+    // PDF attachment & Link card blocks & Spreadsheet/Database/Callout/Toggle blocks
     md = md.replace(/<div data-type="pdf-attachment"[^>]*data-name="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '📄 [$1](attachment)\n\n');
     md = md.replace(/<div data-type="spreadsheet-attachment"[^>]*data-title="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '📊 [$1](spreadsheet)\n\n');
+    md = md.replace(/<div data-type="database-block"[^>]*data-title="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '🗄️ [$1](database)\n\n');
+    md = md.replace(/<div data-type="callout-block"[^>]*data-text="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '> $1\n\n');
+    md = md.replace(/<div data-type="toggle-block"[^>]*data-title="([^"]*)"[^>]*data-body="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '### $1\n\n$2\n\n');
     md = md.replace(/<div data-type="link-card"[^>]*data-url="([^"]*)"[^>]*data-title="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '🔗 [$2]($1)\n\n');
     md = md.replace(/<div data-type="link-card"[^>]*data-url="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi, '🔗 [$1]($1)\n\n');
     // Paragraphs & line breaks

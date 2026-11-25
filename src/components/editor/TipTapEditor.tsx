@@ -21,6 +21,10 @@ import { MermaidBlock } from './extensions/MermaidBlock';
 import { PdfAttachmentNode } from './extensions/PdfAttachment';
 import { SpreadsheetNode } from './extensions/SpreadsheetNode';
 import { LinkCardNode } from './extensions/LinkCard';
+import { CalloutBlock } from './extensions/CalloutBlock';
+import { ToggleBlock } from './extensions/ToggleBlock';
+import { DatabaseBlockNode } from './extensions/DatabaseBlock';
+import { SlashCommandMenu } from './SlashCommandMenu';
 import { EditorToolbar } from './EditorToolbar';
 import { MinimalistEditorHeader } from './MinimalistEditorHeader';
 import { FindReplaceBar } from './FindReplaceBar';
@@ -59,6 +63,7 @@ import {
   X,
   Code,
   ChevronRight,
+  FileText,
   Link2,
 } from 'lucide-react';
 
@@ -120,6 +125,8 @@ interface TipTapEditorProps {
   onStatsChange?: (stats: { words: number; chars: number; readingTime: number }) => void;
   onOpenTemplates?: () => void;
   onOpenHistory?: () => void;
+  onCreateSubPage?: (parentNoteId: string) => void;
+  onOpenShare?: () => void;
 }
 
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
@@ -144,10 +151,21 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   onStatsChange,
   onOpenTemplates,
   onOpenHistory,
+  onCreateSubPage,
 }) => {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showToc, setShowToc] = useState(editorLayout.showTableOfContents);
-  const [title, setTitle] = useState(note.title);
+  const isDefaultPlaceholderTitle = (t?: string) =>
+    !t || t === 'Untitled Note' || t === 'Sans titre';
+  const [title, setTitle] = useState(isDefaultPlaceholderTitle(note.title) ? '' : note.title);
+  const [suggestedTitle, setSuggestedTitle] = useState(() =>
+    extractTitleFromContent(note.content || '', note.plainText || '')
+  );
+  const [slashMenu, setSlashMenu] = useState<{ open: boolean; pos: { top: number; left: number }; query: string }>({
+    open: false,
+    pos: { top: 0, left: 0 },
+    query: '',
+  });
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -155,9 +173,10 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync title when active note changes
+  // Sync title when active note changes (keep empty if untitled so gray suggestion shows)
   useEffect(() => {
-    setTitle(note.title);
+    setTitle(isDefaultPlaceholderTitle(note.title) ? '' : note.title);
+    setSuggestedTitle(extractTitleFromContent(note.content || '', note.plainText || ''));
   }, [note.id, note.title]);
 
   const editor = useEditor({
@@ -208,6 +227,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       PdfAttachmentNode,
       SpreadsheetNode,
       LinkCardNode,
+      CalloutBlock,
+      ToggleBlock,
+      DatabaseBlockNode,
     ],
     content: note.content || '',
     editorProps: {
@@ -342,6 +364,31 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           }
         }
 
+        // 1b. Standalone URL paste -> insert LinkCardNode (same card style as PDF/CSV with format switcher)
+        const pastedPlain = (event.clipboardData?.getData('text/plain') || '').trim();
+        if (
+          pastedPlain &&
+          !pastedPlain.includes('\n') &&
+          (pastedPlain.startsWith('http://') || pastedPlain.startsWith('https://'))
+        ) {
+          try {
+            const parsed = new URL(pastedPlain);
+            event.preventDefault();
+            const hostname = parsed.hostname;
+            const linkTitle = `${hostname}${parsed.pathname.length > 1 ? parsed.pathname : ''}`;
+            const node = view.state.schema.nodes.linkCard.create({
+              url: pastedPlain,
+              title: linkTitle,
+              hostname,
+              displayMode: 'compact',
+            });
+            view.dispatch(view.state.tr.replaceSelectionWith(node));
+            return true;
+          } catch {
+            // fallback to normal paste
+          }
+        }
+
         // Process clipboard via Universal Smart Ingestion Pipeline
         const result = processUniversalClipboard(event);
         if (result.type === 'image') {
@@ -402,30 +449,30 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       const internalLinks = extractInternalLinks(html, allNotes);
       syncBacklinks(note.id, internalLinks);
 
-      // Real-time automatic note title generation from content
-      let activeTitle = title;
-      const isAutoTitleEligible =
-        !note.title ||
-        note.title === 'Untitled Note' ||
-        note.title === 'Sans titre' ||
-        note.isAutoTitle === true ||
-        (note.isAutoTitle !== false && (!title || title === 'Untitled Note'));
+      // Compute gray suggested title (never written directly into note.title)
+      const nextSuggested = extractTitleFromContent(html, trimmed);
+      setSuggestedTitle(nextSuggested);
 
-      if (isAutoTitleEligible && trimmed.length > 0) {
-        const auto = extractTitleFromContent(html, trimmed);
-        if (auto && auto !== title) {
-          activeTitle = auto;
-          setTitle(auto);
-        }
+      // Detect "/" Slash Command trigger
+      const { from } = ed.state.selection;
+      const textBefore = ed.state.doc.textBetween(Math.max(0, from - 25), from, '\n');
+      const slashMatch = textBefore.match(/(?:^|\s)\/([a-zA-Z0-9]*)$/);
+      if (slashMatch) {
+        const coords = ed.view.coordsAtPos(from);
+        setSlashMenu({
+          open: true,
+          pos: { top: Math.min(window.innerHeight - 300, coords.bottom + 6), left: Math.min(window.innerWidth - 280, coords.left) },
+          query: slashMatch[1] || '',
+        });
+      } else if (slashMenu.open) {
+        setSlashMenu((prev) => ({ ...prev, open: false }));
       }
 
       onUpdateNote({
-        title: activeTitle,
         content: html,
         plainText: text,
         internalLinks,
         updatedAt: Date.now(),
-        ...(isAutoTitleEligible ? { isAutoTitle: true } : {}),
       });
     },
   });
@@ -768,17 +815,48 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               </div>
             )}
 
-            {/* Editable Note Title */}
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={handleTitleKeyDown}
-              placeholder="Note Title"
-              className="w-full bg-transparent font-bold text-2xl md:text-3xl text-stone-900 dark:text-stone-100 placeholder-stone-300 dark:placeholder-zinc-700 focus:outline-none mb-4 pb-1 transition-all"
-            />
+            {/* Editable Note Title with Gray Suggested Title Placeholder */}
+            <div className="relative mb-4 pb-1 flex items-center gap-2">
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab' && !title.trim() && suggestedTitle) {
+                    e.preventDefault();
+                    setTitle(suggestedTitle);
+                    onUpdateNote({
+                      title: suggestedTitle,
+                      isAutoTitle: false,
+                      updatedAt: Date.now(),
+                    });
+                    return;
+                  }
+                  handleTitleKeyDown(e);
+                }}
+                placeholder={suggestedTitle || 'Note Title'}
+                className="w-full bg-transparent font-bold text-2xl md:text-3xl text-stone-900 dark:text-stone-100 placeholder-stone-400/70 dark:placeholder-zinc-500/70 focus:outline-none transition-all"
+              />
+              {!title.trim() && suggestedTitle && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitle(suggestedTitle);
+                    onUpdateNote({
+                      title: suggestedTitle,
+                      isAutoTitle: false,
+                      updatedAt: Date.now(),
+                    });
+                  }}
+                  className="no-print flex-shrink-0 px-2 py-0.5 text-[10px] font-medium rounded-md bg-stone-100 dark:bg-zinc-800 text-stone-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 border border-stone-200 dark:border-zinc-700 transition"
+                  title="Accept suggested title (Tab)"
+                >
+                  Tab to accept
+                </button>
+              )}
+            </div>
 
             {/* Floating Bubble Menu on text selection */}
             {editor && (
@@ -849,28 +927,69 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               <EditorContent editor={editor} />
             </div>
 
-            {/* Backlinks & Referencing Notes Section */}
-            {backlinksNotes.length > 0 && (
-              <div className="mt-12 pt-6 border-t border-stone-200/60 dark:border-zinc-800/60 text-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-stone-500 dark:text-zinc-400 mb-3">
-                  <Link2 className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Referenced by ({backlinksNotes.length} note{backlinksNotes.length === 1 ? '' : 's'}):</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {backlinksNotes.map((bn) => (
+            {/* Nested Sub-Pages & Backlinks Section */}
+            <div className="no-print mt-10 pt-5 border-t border-stone-200/60 dark:border-zinc-800/60 text-xs space-y-5">
+              {/* Sub-pages */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-stone-500 dark:text-zinc-400">
+                    Sub-pages ({allNotes.filter((n) => n.parentNoteId === note.id && !n.isTrash).length})
+                  </span>
+                  {onCreateSubPage && (
                     <button
-                      key={bn.id}
                       type="button"
-                      onClick={() => onNavigateToNote && onNavigateToNote(bn.id)}
-                      className="p-2.5 rounded-lg border border-stone-200/70 dark:border-zinc-800 hover:bg-stone-100/60 dark:hover:bg-zinc-900 text-left transition"
+                      onClick={() => onCreateSubPage(note.id)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-stone-100 dark:bg-zinc-800 hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-600 dark:text-zinc-300 text-[11px] font-medium transition"
                     >
-                      <h5 className="font-semibold text-stone-800 dark:text-stone-200 truncate">{bn.title}</h5>
-                      <p className="text-[10px] text-stone-400 truncate mt-0.5">{bn.plainText || 'No preview'}</p>
+                      <Plus className="w-3 h-3" />
+                      <span>Add Sub-page</span>
                     </button>
-                  ))}
+                  )}
                 </div>
+                {allNotes.filter((n) => n.parentNoteId === note.id && !n.isTrash).length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {allNotes
+                      .filter((n) => n.parentNoteId === note.id && !n.isTrash)
+                      .map((sp) => (
+                        <button
+                          key={sp.id}
+                          type="button"
+                          onClick={() => onNavigateToNote && onNavigateToNote(sp.id)}
+                          className="p-2.5 rounded-lg border border-stone-200/70 dark:border-zinc-800 hover:bg-stone-100/60 dark:hover:bg-zinc-900 text-left transition flex items-center gap-2"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                          <span className="font-semibold text-stone-800 dark:text-stone-200 truncate">
+                            {sp.title || 'Untitled Sub-page'}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Backlinks */}
+              {backlinksNotes.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 font-semibold text-stone-500 dark:text-zinc-400 mb-2">
+                    <Link2 className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Referenced by ({backlinksNotes.length} note{backlinksNotes.length === 1 ? '' : 's'}):</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {backlinksNotes.map((bn) => (
+                      <button
+                        key={bn.id}
+                        type="button"
+                        onClick={() => onNavigateToNote && onNavigateToNote(bn.id)}
+                        className="p-2.5 rounded-lg border border-stone-200/70 dark:border-zinc-800 hover:bg-stone-100/60 dark:hover:bg-zinc-900 text-left transition"
+                      >
+                        <h5 className="font-semibold text-stone-800 dark:text-stone-200 truncate">{bn.title}</h5>
+                        <p className="text-[10px] text-stone-400 truncate mt-0.5">{bn.plainText || 'No preview'}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -919,6 +1038,43 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         editor={editor}
         onClose={() => setContextMenuPos(null)}
       />
+
+      {/* Slash (/) Command Menu */}
+      {editor && (
+        <SlashCommandMenu
+          editor={editor}
+          isOpen={slashMenu.open}
+          position={slashMenu.pos}
+          query={slashMenu.query}
+          onClose={() => setSlashMenu((prev) => ({ ...prev, open: false }))}
+          onCreateDatabase={async () => {
+            const now = Date.now();
+            const colId = `col-${now}`;
+            const statusId = `col-status-${now}`;
+            const newDb = {
+              id: `db-${now}`,
+              title: 'Inline Database',
+              columns: [
+                { id: colId, name: 'Name', type: 'text' as const },
+                { id: statusId, name: 'Status', type: 'select' as const, options: ['To Do', 'In Progress', 'Done'] },
+              ],
+              rows: [
+                { id: `row-${now}`, cells: { [colId]: 'First item', [statusId]: 'To Do' }, createdAt: now, updatedAt: now },
+              ],
+              defaultView: 'table' as const,
+              noteId: note.id,
+              createdAt: now,
+              updatedAt: now,
+            };
+            await db.databases.add(newDb);
+            editor
+              .chain()
+              .focus()
+              .insertContent(`<div data-type="database-block" data-database-id="${newDb.id}" data-title="${newDb.title}"></div>`)
+              .run();
+          }}
+        />
+      )}
     </div>
   );
 };

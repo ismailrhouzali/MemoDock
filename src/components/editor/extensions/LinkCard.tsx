@@ -10,7 +10,12 @@ import {
   Eye,
   ShieldCheck,
   Maximize2,
+  AtSign,
+  Link2,
+  LayoutTemplate,
 } from 'lucide-react';
+
+export type LinkDisplayMode = 'compact' | 'embedded' | 'mention' | 'url';
 
 const LinkCardComponent: React.FC<NodeViewProps> = ({
   node,
@@ -26,7 +31,7 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
     displayMode = 'compact',
   } = node.attrs;
 
-  const [isEmbedded, setIsEmbedded] = useState<boolean>(displayMode === 'embedded');
+  const [mode, setMode] = useState<LinkDisplayMode>(displayMode || 'compact');
   const [copied, setCopied] = useState<boolean>(false);
   const [imgError, setImgError] = useState<boolean>(false);
 
@@ -40,10 +45,9 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
 
   const displayTitle = title || parsedHostname;
 
-  const toggleDisplayMode = () => {
-    const next = !isEmbedded;
-    setIsEmbedded(next);
-    updateAttributes({ displayMode: next ? 'embedded' : 'compact' });
+  const changeDisplayMode = (nextMode: LinkDisplayMode) => {
+    setMode(nextMode);
+    updateAttributes({ displayMode: nextMode });
   };
 
   const handleCopy = () => {
@@ -60,12 +64,97 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
 
   const faviconUrl = favicon || `https://www.google.com/s2/favicons?domain=${parsedHostname}&sz=64`;
 
+  // Format Switcher Pill
+  const FormatSwitcher = () => (
+    <div className="flex items-center bg-stone-200/60 dark:bg-zinc-800 rounded-md p-0.5 text-[10px] font-medium">
+      {[
+        { id: 'compact' as LinkDisplayMode, label: 'Card', icon: LayoutTemplate },
+        { id: 'embedded' as LinkDisplayMode, label: 'Embed', icon: Eye },
+        { id: 'mention' as LinkDisplayMode, label: 'Mention', icon: AtSign },
+        { id: 'url' as LinkDisplayMode, label: 'URL', icon: Link2 },
+      ].map((fmt) => {
+        const Icon = fmt.icon;
+        return (
+          <button
+            key={fmt.id}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              changeDisplayMode(fmt.id);
+            }}
+            className={`px-1.5 py-0.5 rounded flex items-center gap-1 transition ${
+              mode === fmt.id
+                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold'
+                : 'text-stone-500 dark:text-zinc-400 hover:text-stone-800 dark:hover:text-zinc-200'
+            }`}
+            title={`Switch to ${fmt.label} format`}
+          >
+            <Icon className="w-2.5 h-2.5" />
+            <span className="hidden sm:inline">{fmt.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  // 1. MENTION FORMAT
+  if (mode === 'mention') {
+    return (
+      <NodeViewWrapper className="my-1.5 inline-flex items-center gap-1.5 group select-none align-middle mr-2">
+        <span
+          onClick={handleOpen}
+          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-xs font-medium cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition"
+          title={`Open ${url}`}
+        >
+          {!imgError && faviconUrl ? (
+            <img src={faviconUrl} alt="" onError={() => setImgError(true)} className="w-3.5 h-3.5 rounded-sm object-contain" />
+          ) : (
+            <AtSign className="w-3 h-3" />
+          )}
+          <span className="truncate max-w-[220px]">{displayTitle}</span>
+        </span>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1">
+          <FormatSwitcher />
+          <button type="button" onClick={deleteNode} className="p-1 text-stone-400 hover:text-red-500 rounded">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </NodeViewWrapper>
+    );
+  }
+
+  // 2. PLAIN URL FORMAT
+  if (mode === 'url') {
+    return (
+      <NodeViewWrapper className="my-1.5 flex items-center gap-2 group select-none">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault();
+            handleOpen();
+          }}
+          className="text-xs text-blue-600 dark:text-blue-400 underline underline-offset-4 hover:text-blue-700 dark:hover:text-blue-300 font-medium truncate max-w-lg"
+        >
+          {url}
+        </a>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+          <FormatSwitcher />
+          <button type="button" onClick={deleteNode} className="p-1 text-stone-400 hover:text-red-500 rounded">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </NodeViewWrapper>
+    );
+  }
+
+  // 3. COMPACT CARD & 4. EMBEDDED PREVIEW (matching PDF & CSV card style)
   return (
     <NodeViewWrapper className="my-3 select-none">
-      <div className="border border-stone-200/80 dark:border-zinc-800 rounded-xl overflow-hidden bg-white/70 dark:bg-zinc-900/60 shadow-sm transition hover:border-stone-300 dark:hover:border-zinc-700">
-        
+      <div className="border border-stone-200/80 dark:border-zinc-800 rounded-xl overflow-hidden bg-white/70 dark:bg-zinc-900/60 shadow-sm transition hover:border-blue-400/60 dark:hover:border-blue-700/60">
         {/* Compact Bar / Header */}
-        <div className="flex items-center justify-between p-3 gap-3 bg-stone-50/60 dark:bg-zinc-950/40">
+        <div className="flex flex-wrap items-center justify-between p-3 gap-3 bg-stone-50/60 dark:bg-zinc-950/40">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0 overflow-hidden border border-blue-500/20">
               {!imgError && faviconUrl ? (
@@ -80,7 +169,7 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
               )}
             </div>
 
-            <div className="min-w-0 flex-1 cursor-pointer" onClick={handleOpen} title="Ouvrir le lien dans un nouvel onglet">
+            <div className="min-w-0 flex-1 cursor-pointer group" onClick={handleOpen} title="Open link in new tab">
               <h4 className="font-semibold text-xs text-stone-900 dark:text-stone-100 truncate flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                 <span>{displayTitle}</span>
                 <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 inline transition-opacity text-stone-400" />
@@ -98,17 +187,9 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
             </div>
           </div>
 
-          {/* Action buttons matching PDF attachment card style */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              type="button"
-              onClick={toggleDisplayMode}
-              className="px-2 py-1 rounded bg-stone-200/50 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-stone-700 dark:text-zinc-300 text-[11px] font-medium transition flex items-center gap-1"
-              title={isEmbedded ? 'Collapse preview' : 'Embed in note'}
-            >
-              <Eye className="w-3 h-3" />
-              <span>{isEmbedded ? 'Compact' : 'Preview'}</span>
-            </button>
+          {/* Format Switcher + Action buttons */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <FormatSwitcher />
 
             <button
               type="button"
@@ -140,14 +221,14 @@ const LinkCardComponent: React.FC<NodeViewProps> = ({
         </div>
 
         {/* Description snippet if present */}
-        {description && !isEmbedded && (
+        {description && mode !== 'embedded' && (
           <div className="px-3 pb-2.5 pt-0.5 text-[11px] text-stone-500 dark:text-zinc-400 line-clamp-2">
             {description}
           </div>
         )}
 
         {/* Embedded Iframe / Rich Web Preview when expanded */}
-        {isEmbedded && url && (
+        {mode === 'embedded' && url && (
           <div className="border-t border-stone-200/60 dark:border-zinc-800/60 p-2 bg-stone-100/40 dark:bg-zinc-950/80">
             <div className="flex items-center justify-between px-2 py-1 mb-1 text-[11px] text-stone-500 dark:text-zinc-400">
               <span className="truncate max-w-md font-mono text-[10px]">{url}</span>
@@ -181,24 +262,12 @@ export const LinkCardNode = Node.create({
 
   addAttributes() {
     return {
-      url: {
-        default: '',
-      },
-      title: {
-        default: '',
-      },
-      description: {
-        default: '',
-      },
-      hostname: {
-        default: '',
-      },
-      favicon: {
-        default: '',
-      },
-      displayMode: {
-        default: 'compact',
-      },
+      url: { default: '' },
+      title: { default: '' },
+      description: { default: '' },
+      hostname: { default: '' },
+      favicon: { default: '' },
+      displayMode: { default: 'compact' },
     };
   },
 
@@ -240,4 +309,3 @@ export const LinkCardNode = Node.create({
     return ReactNodeViewRenderer(LinkCardComponent);
   },
 });
-
