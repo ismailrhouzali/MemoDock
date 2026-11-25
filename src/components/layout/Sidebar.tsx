@@ -26,6 +26,7 @@ import {
   Edit2,
   FolderInput,
 } from 'lucide-react';
+import { IconPicker } from '../common/IconPicker';
 import {
   Note,
   Folder,
@@ -65,7 +66,7 @@ interface SidebarProps {
   onTogglePin: (id: string, current: boolean) => void;
   onToggleFavorite: (id: string, current: boolean) => void;
   onCreateFolder: (name: string, color?: string) => Promise<Folder>;
-  onUpdateFolder?: (id: string, name: string, color?: string) => Promise<void>;
+  onUpdateFolder?: (id: string, name: string, color?: string, icon?: string | null) => Promise<void>;
   onDeleteFolder: (id: string) => Promise<void>;
   onCreateTag: (name: string, color?: string) => Promise<Tag>;
   onDeleteTag: (id: string, name: string) => Promise<void>;
@@ -170,6 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteTitle, setEditingNoteTitle] = useState('');
   const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
+  const [iconPickerTarget, setIconPickerTarget] = useState<{ type: 'folder' | 'note'; id: string } | null>(null);
   // Folders are closed (collapsed) by default
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
 
@@ -481,8 +483,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
               : 'border-l-[3px] border-transparent text-stone-700 dark:text-zinc-300 hover:bg-stone-100/70 dark:hover:bg-zinc-900/60 font-normal'
           }`}
         >
-          <div className="flex items-center gap-1 truncate flex-1">
+          <div className="flex items-center gap-1 truncate flex-1 relative">
             <GripVertical className="w-3 h-3 text-stone-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-grab active:cursor-grabbing mr-0.5" />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIconPickerTarget(
+                  iconPickerTarget?.type === 'note' && iconPickerTarget.id === note.id
+                    ? null
+                    : { type: 'note', id: note.id }
+                );
+              }}
+              className="p-0.5 rounded hover:bg-stone-200/70 dark:hover:bg-zinc-700/70 flex-shrink-0 transition"
+              title="Change note icon"
+            >
+              {note.icon ? (
+                <span className="text-xs leading-none">{note.icon}</span>
+              ) : (
+                <FileText className="w-3 h-3 text-stone-400" />
+              )}
+            </button>
+            {iconPickerTarget?.type === 'note' && iconPickerTarget.id === note.id && onUpdateNote && (
+              <IconPicker
+                currentIcon={note.icon}
+                onSelect={(icon) => onUpdateNote(note.id, { icon })}
+                onClose={() => setIconPickerTarget(null)}
+              />
+            )}
             {note.isPinned && <Pin className="w-3 h-3 text-amber-500 fill-amber-500/20 flex-shrink-0" />}
             <span className="truncate block flex-1">{note.title || 'Untitled Note'}</span>
           </div>
@@ -847,7 +875,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             : 'text-stone-700 dark:text-zinc-300 hover:bg-stone-100/80 dark:hover:bg-zinc-900/60'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 truncate flex-1">
+                        <div className="flex items-center gap-1.5 truncate flex-1 relative">
                           <GripVertical className="w-3 h-3 text-stone-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-grab active:cursor-grabbing -mr-0.5" />
                           <span className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200">
                             {isCollapsed ? (
@@ -856,10 +884,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               <ChevronDown className="w-3.5 h-3.5" />
                             )}
                           </span>
-                          <FolderIcon
-                            className="w-3.5 h-3.5 flex-shrink-0"
-                            style={{ color: folder.color || '#d97706' }}
-                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIconPickerTarget(
+                                iconPickerTarget?.type === 'folder' && iconPickerTarget.id === folder.id
+                                  ? null
+                                  : { type: 'folder', id: folder.id }
+                              );
+                            }}
+                            className="p-0.5 rounded hover:bg-stone-200/70 dark:hover:bg-zinc-700/70 flex-shrink-0 transition"
+                            title="Change folder icon"
+                          >
+                            {folder.icon ? (
+                              <span className="text-xs leading-none">{folder.icon}</span>
+                            ) : (
+                              <FolderIcon
+                                className="w-3.5 h-3.5 flex-shrink-0"
+                                style={{ color: folder.color || '#d97706' }}
+                              />
+                            )}
+                          </button>
+                          {iconPickerTarget?.type === 'folder' && iconPickerTarget.id === folder.id && onUpdateFolder && (
+                            <IconPicker
+                              currentIcon={folder.icon}
+                              onSelect={(icon) => onUpdateFolder(folder.id, folder.name, folder.color, icon ?? null)}
+                              onClose={() => setIconPickerTarget(null)}
+                            />
+                          )}
                           <span className="truncate font-semibold text-stone-800 dark:text-zinc-200">
                             {folder.name}
                           </span>

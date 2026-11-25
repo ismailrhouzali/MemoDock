@@ -1,6 +1,7 @@
 export interface Note {
   id: string;
   title: string;
+  icon?: string; // Notion-style custom emoji/icon for note
   content: string; // TipTap HTML or serialized state
   plainText: string; // For instant full-text search & snippet display
   createdAt: number;
@@ -67,19 +68,30 @@ export interface ResourceCollection {
 
 export type WorkspaceView = 'notes' | 'dashboard' | 'databases' | 'documents';
 
-export type DatabaseColumnType = 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'url';
+export type DatabaseColumnType =
+  | 'text'
+  | 'number'
+  | 'select'
+  | 'multi-select'
+  | 'status'
+  | 'date'
+  | 'person'
+  | 'image'
+  | 'checkbox'
+  | 'url';
 export type DatabaseViewType = 'table' | 'board' | 'gallery';
 
 export interface DatabaseColumn {
   id: string;
   name: string;
   type: DatabaseColumnType;
-  options?: string[]; // For 'select' columns (used for Kanban Board grouping too)
+  options?: string[]; // For 'select', 'multi-select', 'status' columns
 }
 
 export interface DatabaseRow {
   id: string;
-  cells: Record<string, string | number | boolean>;
+  cells: Record<string, string | number | boolean | string[]>;
+  linkedNoteId?: string; // Row-as-page link (+ New page)
   createdAt: number;
   updatedAt: number;
 }
@@ -87,6 +99,7 @@ export interface DatabaseRow {
 export interface NoteDatabase {
   id: string;
   title: string;
+  icon?: string; // Custom icon for database
   description?: string;
   columns: DatabaseColumn[];
   rows: DatabaseRow[];

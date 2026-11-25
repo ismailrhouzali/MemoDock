@@ -10,6 +10,7 @@ import {
 } from '../../db/types';
 import { parseXlsxWorkbook } from '../../services/spreadsheet/xlsxEngine';
 import { parseCsv, exportToCsv } from '../../services/spreadsheet/csvEngine';
+import { IconPicker } from '../common/IconPicker';
 import {
   Database,
   Plus,
@@ -23,44 +24,70 @@ import {
   CheckSquare,
   Square,
   ArrowUpDown,
-  X,
+  AlignLeft,
+  ChevronDownCircle,
+  ListChecks,
+  CircleDot,
+  Calendar,
+  User,
+  Image as ImageIcon,
+  Hash,
+  Link2,
+  FileText,
 } from 'lucide-react';
 
 interface DatabaseViewProps {
   onInsertDatabaseInNote?: (database: NoteDatabase) => void;
+  onOpenRowAsPage?: (row: DatabaseRow, database: NoteDatabase) => void;
 }
 
-export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNote }) => {
+const PROPERTY_TYPES: {
+  type: DatabaseColumnType;
+  label: string;
+  Icon: React.FC<{ className?: string }>;
+}[] = [
+  { type: 'text', label: 'Text', Icon: AlignLeft },
+  { type: 'select', label: 'Select', Icon: ChevronDownCircle },
+  { type: 'multi-select', label: 'Multi-select', Icon: ListChecks },
+  { type: 'status', label: 'Status', Icon: CircleDot },
+  { type: 'date', label: 'Date', Icon: Calendar },
+  { type: 'person', label: 'Person', Icon: User },
+  { type: 'image', label: 'Image', Icon: ImageIcon },
+  { type: 'number', label: 'Number', Icon: Hash },
+  { type: 'checkbox', label: 'Checkbox', Icon: CheckSquare },
+  { type: 'url', label: 'URL', Icon: Link2 },
+];
+
+const STATUS_OPTIONS = ['Not started', 'In progress', 'Done'];
+
+export const DatabaseView: React.FC<DatabaseViewProps> = ({
+  onInsertDatabaseInNote,
+  onOpenRowAsPage,
+}) => {
   const databases = useLiveQuery(() => db.databases.orderBy('updatedAt').reverse().toArray(), []) || [];
   const [selectedDbId, setSelectedDbId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<DatabaseViewType>('table');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortColId, setSortColId] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
-  const [isAddingCol, setIsAddingCol] = useState(false);
+  const [isPropMenuOpen, setIsPropMenuOpen] = useState(false);
   const [newColName, setNewColName] = useState('');
-  const [newColType, setNewColType] = useState<DatabaseColumnType>('text');
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeDb = databases.find((d) => d.id === selectedDbId) || databases[0] || null;
 
   const createEmptyDatabase = async (title?: string) => {
     const now = Date.now();
-    const statusColId = `col-status-${now}`;
     const titleColId = `col-title-${now}`;
-    const dateColId = `col-date-${now}`;
     const newDb: NoteDatabase = {
       id: `db-${now}-${Math.random().toString(36).substring(2, 6)}`,
-      title: title || 'Untitled Database',
-      columns: [
-        { id: titleColId, name: 'Name', type: 'text' },
-        { id: statusColId, name: 'Status', type: 'select', options: ['To Do', 'In Progress', 'Done'] },
-        { id: dateColId, name: 'Date', type: 'date' },
-      ],
+      title: title || '',
+      columns: [{ id: titleColId, name: 'Name', type: 'text' }],
       rows: [
         {
           id: `row-${now}-1`,
-          cells: { [titleColId]: 'Sample Item 1', [statusColId]: 'To Do', [dateColId]: new Date().toISOString().slice(0, 10) },
+          cells: { [titleColId]: '' },
           createdAt: now,
           updatedAt: now,
         },
@@ -103,7 +130,9 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
       const columns: DatabaseColumn[] = headers.map((h, idx) => {
         const sampleVals = rawRows.slice(0, 15).map((r) => (r[idx] || '').trim()).filter(Boolean);
         const isNumeric = sampleVals.length > 0 && sampleVals.every((v) => !isNaN(Number(v)));
-        const isBool = sampleVals.length > 0 && sampleVals.every((v) => ['true', 'false', 'yes', 'no', '0', '1'].includes(v.toLowerCase()));
+        const isBool =
+          sampleVals.length > 0 &&
+          sampleVals.every((v) => ['true', 'false', 'yes', 'no', '0', '1'].includes(v.toLowerCase()));
         return {
           id: `col-${now}-${idx}`,
           name: h || `Column ${idx + 1}`,
@@ -112,7 +141,7 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
       });
 
       const rows: DatabaseRow[] = rawRows.map((r, rIdx) => {
-        const cells: Record<string, string | number | boolean> = {};
+        const cells: Record<string, string | number | boolean | string[]> = {};
         columns.forEach((col, cIdx) => {
           const val = r[cIdx] ?? '';
           if (col.type === 'checkbox') {
@@ -134,6 +163,7 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
       const importedDb: NoteDatabase = {
         id: `db-${now}-${Math.random().toString(36).substring(2, 6)}`,
         title: baseName || 'Imported Database',
+        icon: '📊',
         columns,
         rows,
         defaultView: 'table',
@@ -156,14 +186,17 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
     if (!activeDb) return;
     const headers = activeDb.columns.map((c) => c.name);
     const rows = activeDb.rows.map((r) =>
-      activeDb.columns.map((c) => String(r.cells[c.id] ?? ''))
+      activeDb.columns.map((c) => {
+        const val = r.cells[c.id];
+        return Array.isArray(val) ? val.join('; ') : String(val ?? '');
+      })
     );
     const csv = exportToCsv(headers, rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${activeDb.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
+    a.download = `${(activeDb.title || 'database').replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -173,7 +206,7 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
     await db.databases.update(activeDb.id, { ...updates, updatedAt: Date.now() });
   };
 
-  const handleAddRow = async (presetCells?: Record<string, string | number | boolean>) => {
+  const handleAddRow = async (presetCells?: Record<string, string | number | boolean | string[]>) => {
     if (!activeDb) return;
     const now = Date.now();
     const newRow: DatabaseRow = {
@@ -183,9 +216,14 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
       updatedAt: now,
     };
     await updateDb({ rows: [...activeDb.rows, newRow] });
+    return newRow;
   };
 
-  const handleUpdateCell = async (rowId: string, colId: string, value: string | number | boolean) => {
+  const handleUpdateCell = async (
+    rowId: string,
+    colId: string,
+    value: string | number | boolean | string[]
+  ) => {
     if (!activeDb) return;
     const updatedRows = activeDb.rows.map((r) =>
       r.id === rowId
@@ -200,17 +238,31 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
     await updateDb({ rows: activeDb.rows.filter((r) => r.id !== rowId) });
   };
 
-  const handleAddColumn = async () => {
-    if (!activeDb || !newColName.trim()) return;
+  const handleAddProperty = async (type: DatabaseColumnType) => {
+    if (!activeDb) return;
+    const labelMap: Record<DatabaseColumnType, string> = {
+      text: 'Text',
+      select: 'Select',
+      'multi-select': 'Tags',
+      status: 'Status',
+      date: 'Date',
+      person: 'Person',
+      image: 'Image',
+      number: 'Number',
+      checkbox: 'Done',
+      url: 'URL',
+    };
     const col: DatabaseColumn = {
       id: `col-${Date.now()}`,
-      name: newColName.trim(),
-      type: newColType,
-      ...(newColType === 'select' ? { options: ['To Do', 'In Progress', 'Done'] } : {}),
+      name: newColName.trim() || labelMap[type],
+      type,
+      ...(type === 'select' ? { options: ['Option 1', 'Option 2', 'Option 3'] } : {}),
+      ...(type === 'multi-select' ? { options: ['Important', 'Work', 'Study', 'Idea'] } : {}),
+      ...(type === 'status' ? { options: STATUS_OPTIONS } : {}),
     };
     await updateDb({ columns: [...activeDb.columns, col] });
     setNewColName('');
-    setIsAddingCol(false);
+    setIsPropMenuOpen(false);
   };
 
   const handleDeleteDatabase = async (id: string) => {
@@ -232,11 +284,162 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
           if (!sortColId) return 0;
           const va = String(a.cells[sortColId] ?? '');
           const vb = String(b.cells[sortColId] ?? '');
-          return sortAsc ? va.localeCompare(vb, undefined, { numeric: true }) : vb.localeCompare(va, undefined, { numeric: true });
+          return sortAsc
+            ? va.localeCompare(vb, undefined, { numeric: true })
+            : vb.localeCompare(va, undefined, { numeric: true });
         })
     : [];
 
-  const selectCol = activeDb?.columns.find((c) => c.type === 'select');
+  const boardGroupCol = activeDb?.columns.find((c) => c.type === 'status' || c.type === 'select');
+
+  const renderCell = (row: DatabaseRow, col: DatabaseColumn) => {
+    const val = row.cells[col.id];
+
+    if (col.type === 'checkbox') {
+      return (
+        <button
+          type="button"
+          onClick={() => handleUpdateCell(row.id, col.id, !val)}
+          className="text-blue-600"
+        >
+          {val ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-stone-400" />}
+        </button>
+      );
+    }
+
+    if (col.type === 'status') {
+      const current = String(val || 'Not started');
+      const badgeColor =
+        current === 'Done'
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+          : current === 'In progress'
+          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+          : 'bg-stone-100 text-stone-600 dark:bg-zinc-800 dark:text-zinc-300';
+      return (
+        <select
+          value={current}
+          onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
+          className={`rounded-full px-2 py-0.5 text-[11px] font-medium focus:outline-none cursor-pointer ${badgeColor}`}
+        >
+          {(col.options || STATUS_OPTIONS).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (col.type === 'select') {
+      return (
+        <select
+          value={String(val ?? '')}
+          onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
+          className="bg-stone-100 dark:bg-zinc-800 rounded px-2 py-0.5 text-[11px] font-medium focus:outline-none"
+        >
+          <option value="">—</option>
+          {(col.options || ['Option 1', 'Option 2', 'Option 3']).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (col.type === 'multi-select') {
+      const selected = Array.isArray(val) ? val : val ? [String(val)] : [];
+      const opts = col.options || ['Important', 'Work', 'Study', 'Idea'];
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          {selected.map((tag) => (
+            <span
+              key={tag}
+              onClick={() =>
+                handleUpdateCell(
+                  row.id,
+                  col.id,
+                  selected.filter((t) => t !== tag)
+                )
+              }
+              className="px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 text-[10px] font-medium cursor-pointer hover:line-through"
+              title="Click to remove"
+            >
+              {tag}
+            </span>
+          ))}
+          <select
+            value=""
+            onChange={(e) => {
+              const next = e.target.value;
+              if (next && !selected.includes(next)) {
+                handleUpdateCell(row.id, col.id, [...selected, next]);
+              }
+            }}
+            className="bg-transparent text-[10px] text-stone-400 hover:text-stone-700 focus:outline-none w-12 cursor-pointer"
+          >
+            <option value="">+ tag</option>
+            {opts
+              .filter((o) => !selected.includes(o))
+              .map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+          </select>
+        </div>
+      );
+    }
+
+    if (col.type === 'person') {
+      return (
+        <div className="flex items-center gap-1.5">
+          <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+            {String(val || '?').charAt(0).toUpperCase()}
+          </span>
+          <input
+            type="text"
+            value={String(val ?? '')}
+            onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
+            placeholder="Assignee..."
+            className="w-full bg-transparent focus:outline-none text-xs placeholder-stone-400"
+          />
+        </div>
+      );
+    }
+
+    if (col.type === 'image') {
+      const imgUrl = String(val ?? '');
+      return (
+        <div className="flex items-center gap-1.5">
+          {imgUrl && (
+            <img
+              src={imgUrl}
+              alt=""
+              className="w-6 h-6 rounded object-cover border border-stone-200 dark:border-zinc-700 flex-shrink-0"
+            />
+          )}
+          <input
+            type="text"
+            value={imgUrl}
+            onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
+            placeholder="Image URL..."
+            className="w-full bg-transparent focus:outline-none text-[11px] placeholder-stone-400"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <input
+        type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
+        value={String(val ?? '')}
+        onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
+        placeholder={col.id === activeDb?.columns[0]?.id ? 'Untitled' : ''}
+        className="w-full bg-transparent focus:outline-none focus:bg-white dark:focus:bg-zinc-800 px-1 py-0.5 rounded placeholder-stone-400"
+      />
+    );
+  };
 
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-white dark:bg-obsidian-950 text-stone-800 dark:text-stone-200">
@@ -301,8 +504,14 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                 }`}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <Database className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
-                  <span className="truncate">{d.title}</span>
+                  {d.icon ? (
+                    <span className="text-xs leading-none">{d.icon}</span>
+                  ) : (
+                    <Database className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+                  )}
+                  <span className={`truncate ${!d.title ? 'text-stone-400' : ''}`}>
+                    {d.title || 'Untitled'}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -327,7 +536,7 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
           <Database className="w-12 h-12 text-stone-300 dark:text-zinc-700 mb-3" />
           <h2 className="text-base font-semibold mb-1">Structured Databases</h2>
           <p className="text-xs text-stone-500 max-w-md mb-4">
-            Create Notion-style databases with Table, Kanban Board, and Gallery views, or import directly from Excel (.xlsx) and CSV files.
+            Create Notion/Terminus-style databases with Table, Kanban Board, and Gallery views, rich property types, or import directly from Excel (.xlsx) and CSV.
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -351,17 +560,36 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Database Header & View Switcher */}
-          <div className="p-4 border-b border-stone-200/80 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+          <div className="p-4 md:px-6 border-b border-stone-200/80 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 flex-1 min-w-[200px] relative">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsIconPickerOpen(!isIconPickerOpen)}
+                  className="w-8 h-8 rounded-lg hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center text-xl transition"
+                  title="Choose database icon"
+                >
+                  {activeDb.icon ? (
+                    <span>{activeDb.icon}</span>
+                  ) : (
+                    <Database className="w-5 h-5 text-stone-400" />
+                  )}
+                </button>
+                {isIconPickerOpen && (
+                  <IconPicker
+                    currentIcon={activeDb.icon}
+                    onSelect={(icon) => updateDb({ icon })}
+                    onClose={() => setIsIconPickerOpen(false)}
+                  />
+                )}
+              </div>
               <input
                 type="text"
                 value={activeDb.title}
                 onChange={(e) => updateDb({ title: e.target.value })}
-                className="text-lg font-bold bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 -ml-1"
+                placeholder="New database"
+                className="text-xl md:text-2xl font-bold bg-transparent text-stone-900 dark:text-stone-100 placeholder-stone-300 dark:placeholder-zinc-600 focus:outline-none w-full"
               />
-              <span className="text-[11px] text-stone-400 font-mono">
-                {activeDb.rows.length} rows × {activeDb.columns.length} cols
-              </span>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -401,14 +629,14 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter rows..."
-                  className="pl-7 pr-2.5 py-1 text-xs bg-stone-100 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-36"
+                  placeholder="Filter..."
+                  className="pl-7 pr-2.5 py-1 text-xs bg-stone-100 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
                 />
               </div>
 
               <button
                 type="button"
-                onClick={() => handleExportCsv()}
+                onClick={handleExportCsv}
                 className="px-2.5 py-1 text-xs border border-stone-200 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-900 rounded-lg flex items-center gap-1"
                 title="Export as CSV"
               >
@@ -429,152 +657,142 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
           </div>
 
           {/* Active View Body */}
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-4 md:p-6">
             {currentView === 'table' && (
-              <div className="border border-stone-200 dark:border-zinc-800 rounded-xl overflow-x-auto">
-                <table className="w-full border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-stone-50 dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800">
-                      {activeDb.columns.map((col) => (
-                        <th
-                          key={col.id}
-                          className="text-left px-3 py-2 font-semibold text-stone-700 dark:text-zinc-300 border-r border-stone-200 dark:border-zinc-800 min-w-[140px]"
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="truncate">{col.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (sortColId === col.id) setSortAsc(!sortAsc);
-                                else {
-                                  setSortColId(col.id);
-                                  setSortAsc(true);
-                                }
-                              }}
-                              className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200"
-                              title="Sort column"
-                            >
-                              <ArrowUpDown className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </th>
-                      ))}
-                      <th className="px-2 py-2 w-24">
-                        {isAddingCol ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={newColName}
-                              onChange={(e) => setNewColName(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
-                              placeholder="Col name"
-                              className="w-20 px-1.5 py-0.5 border border-blue-400 rounded text-[11px] bg-white dark:bg-zinc-800"
-                              autoFocus
-                            />
-                            <select
-                              value={newColType}
-                              onChange={(e) => setNewColType(e.target.value as DatabaseColumnType)}
-                              className="text-[10px] bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded py-0.5"
-                            >
-                              <option value="text">Text</option>
-                              <option value="number">Num</option>
-                              <option value="select">Select</option>
-                              <option value="checkbox">Check</option>
-                              <option value="date">Date</option>
-                              <option value="url">URL</option>
-                            </select>
-                            <button type="button" onClick={handleAddColumn} className="text-blue-600 font-bold">+</button>
-                            <button type="button" onClick={() => setIsAddingCol(false)} className="text-stone-400">
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ) : (
+              <div className="border border-stone-200 dark:border-zinc-800 rounded-xl overflow-visible">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-stone-50/70 dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800">
+                        {activeDb.columns.map((col) => (
+                          <th
+                            key={col.id}
+                            className="text-left px-3 py-2 font-semibold text-stone-700 dark:text-zinc-300 border-r border-stone-200 dark:border-zinc-800 min-w-[150px]"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="truncate">{col.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (sortColId === col.id) setSortAsc(!sortAsc);
+                                  else {
+                                    setSortColId(col.id);
+                                    setSortAsc(true);
+                                  }
+                                }}
+                                className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200"
+                                title="Sort column"
+                              >
+                                <ArrowUpDown className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </th>
+                        ))}
+                        <th className="px-2 py-2 w-12 relative">
                           <button
                             type="button"
-                            onClick={() => setIsAddingCol(true)}
-                            className="flex items-center gap-1 text-stone-400 hover:text-blue-600 font-normal"
+                            onClick={() => setIsPropMenuOpen(!isPropMenuOpen)}
+                            className="p-1 text-stone-400 hover:text-blue-600 rounded hover:bg-stone-200/60 dark:hover:bg-zinc-800 transition"
+                            title="Add Property Column"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Column</span>
+                            <Plus className="w-4 h-4" />
                           </button>
-                        )}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-stone-100 dark:border-zinc-800/70 hover:bg-stone-50/60 dark:hover:bg-zinc-900/40 group"
-                      >
-                        {activeDb.columns.map((col) => {
-                          const val = row.cells[col.id];
-                          return (
+
+                          {/* Terminus/Notion Property Type Dropdown */}
+                          {isPropMenuOpen && (
+                            <>
+                              <div className="fixed inset-0 z-30" onClick={() => setIsPropMenuOpen(false)} />
+                              <div className="absolute right-0 top-full mt-1 z-40 w-48 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl shadow-float p-1.5 text-xs text-left font-normal animate-in fade-in duration-100">
+                                <input
+                                  type="text"
+                                  value={newColName}
+                                  onChange={(e) => setNewColName(e.target.value)}
+                                  placeholder="Property name..."
+                                  className="w-full px-2 py-1 mb-1.5 bg-stone-50 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  autoFocus
+                                />
+                                <div className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 px-2 py-0.5">
+                                  Property Type
+                                </div>
+                                <div className="max-h-56 overflow-y-auto">
+                                  {PROPERTY_TYPES.map((pt) => {
+                                    const Icon = pt.Icon;
+                                    return (
+                                      <button
+                                        key={pt.type}
+                                        type="button"
+                                        onClick={() => handleAddProperty(pt.type)}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 transition"
+                                      >
+                                        <Icon className="w-3.5 h-3.5 text-stone-400" />
+                                        <span>{pt.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="border-b border-stone-100 dark:border-zinc-800/70 hover:bg-stone-50/60 dark:hover:bg-zinc-900/40 group"
+                        >
+                          {activeDb.columns.map((col, idx) => (
                             <td
                               key={col.id}
                               className="px-3 py-1.5 border-r border-stone-100 dark:border-zinc-800/70"
                             >
-                              {col.type === 'checkbox' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateCell(row.id, col.id, !val)}
-                                  className="text-blue-600"
-                                >
-                                  {val ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-stone-400" />}
-                                </button>
-                              ) : col.type === 'select' ? (
-                                <select
-                                  value={String(val ?? '')}
-                                  onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
-                                  className="bg-stone-100 dark:bg-zinc-800 rounded px-2 py-0.5 text-[11px] font-medium focus:outline-none"
-                                >
-                                  <option value="">—</option>
-                                  {(col.options || ['To Do', 'In Progress', 'Done']).map((opt) => (
-                                    <option key={opt} value={opt}>
-                                      {opt}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
-                                  value={String(val ?? '')}
-                                  onChange={(e) => handleUpdateCell(row.id, col.id, e.target.value)}
-                                  className="w-full bg-transparent focus:outline-none focus:bg-white dark:focus:bg-zinc-800 px-1 py-0.5 rounded"
-                                />
-                              )}
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex-1 min-w-0">{renderCell(row, col)}</div>
+                                {idx === 0 && onOpenRowAsPage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenRowAsPage(row, activeDb)}
+                                    className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-[10px] rounded bg-stone-200/70 dark:bg-zinc-800 hover:bg-blue-600 hover:text-white text-stone-600 dark:text-zinc-300 flex items-center gap-0.5 transition flex-shrink-0"
+                                    title="Open row as Note page"
+                                  >
+                                    <FileText className="w-2.5 h-2.5" />
+                                    <span>Open</span>
+                                  </button>
+                                )}
+                              </div>
                             </td>
-                          );
-                        })}
-                        <td className="px-2 py-1 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRow(row.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-500 rounded"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          ))}
+                          <td className="px-2 py-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRow(row.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-500 rounded"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                 <button
                   type="button"
                   onClick={() => handleAddRow()}
                   className="w-full py-2 px-3 text-left text-xs text-stone-500 hover:text-blue-600 hover:bg-stone-50 dark:hover:bg-zinc-900 flex items-center gap-1.5 transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>New Row</span>
+                  <span>New page</span>
                 </button>
               </div>
             )}
 
             {currentView === 'board' && (
               <div className="flex gap-4 overflow-x-auto pb-4 items-start">
-                {(selectCol?.options || ['To Do', 'In Progress', 'Done']).map((group) => {
+                {(boardGroupCol?.options || STATUS_OPTIONS).map((group) => {
                   const groupRows = filteredRows.filter(
-                    (r) => selectCol && String(r.cells[selectCol.id] || '') === group
+                    (r) => boardGroupCol && String(r.cells[boardGroupCol.id] || 'Not started') === group
                   );
                   return (
                     <div
@@ -591,7 +809,8 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                         {groupRows.map((row) => (
                           <div
                             key={row.id}
-                            className="p-2.5 bg-white dark:bg-zinc-900 border border-stone-200/80 dark:border-zinc-800 rounded-lg shadow-2xs text-xs space-y-1"
+                            onClick={() => onOpenRowAsPage && onOpenRowAsPage(row, activeDb)}
+                            className="p-2.5 bg-white dark:bg-zinc-900 border border-stone-200/80 dark:border-zinc-800 rounded-lg shadow-2xs text-xs space-y-1 cursor-pointer hover:border-blue-400 transition"
                           >
                             <div className="font-semibold text-stone-800 dark:text-zinc-100">
                               {String(row.cells[activeDb.columns[0]?.id] || 'Untitled')}
@@ -599,7 +818,11 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                             {activeDb.columns.slice(1, 3).map((col) => (
                               <div key={col.id} className="text-[11px] text-stone-500 flex justify-between">
                                 <span>{col.name}:</span>
-                                <span className="font-medium">{String(row.cells[col.id] ?? '—')}</span>
+                                <span className="font-medium truncate max-w-[120px]">
+                                  {Array.isArray(row.cells[col.id])
+                                    ? (row.cells[col.id] as string[]).join(', ')
+                                    : String(row.cells[col.id] ?? '—')}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -607,11 +830,11 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleAddRow(selectCol ? { [selectCol.id]: group } : undefined)}
+                        onClick={() => handleAddRow(boardGroupCol ? { [boardGroupCol.id]: group } : undefined)}
                         className="w-full py-1.5 text-[11px] text-stone-500 hover:text-blue-600 flex items-center justify-center gap-1 rounded-lg hover:bg-stone-200/50 dark:hover:bg-zinc-800"
                       >
                         <Plus className="w-3 h-3" />
-                        <span>Add card</span>
+                        <span>New page</span>
                       </button>
                     </div>
                   );
@@ -624,7 +847,8 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                 {filteredRows.map((row) => (
                   <div
                     key={row.id}
-                    className="p-4 bg-stone-50/70 dark:bg-zinc-900/60 border border-stone-200 dark:border-zinc-800 rounded-xl space-y-2 text-xs"
+                    onClick={() => onOpenRowAsPage && onOpenRowAsPage(row, activeDb)}
+                    className="p-4 bg-stone-50/70 dark:bg-zinc-900/60 border border-stone-200 dark:border-zinc-800 rounded-xl space-y-2 text-xs cursor-pointer hover:border-blue-400 transition"
                   >
                     <div className="font-bold text-sm text-stone-900 dark:text-zinc-100">
                       {String(row.cells[activeDb.columns[0]?.id] || 'Untitled')}
@@ -633,8 +857,10 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ onInsertDatabaseInNo
                       {activeDb.columns.slice(1).map((col) => (
                         <div key={col.id} className="flex items-center justify-between text-[11px]">
                           <span className="text-stone-400">{col.name}</span>
-                          <span className="text-stone-700 dark:text-zinc-300 font-medium">
-                            {String(row.cells[col.id] ?? '—')}
+                          <span className="text-stone-700 dark:text-zinc-300 font-medium truncate max-w-[140px]">
+                            {Array.isArray(row.cells[col.id])
+                              ? (row.cells[col.id] as string[]).join(', ')
+                              : String(row.cells[col.id] ?? '—')}
                           </span>
                         </div>
                       ))}

@@ -25,8 +25,8 @@ import { CalloutBlock } from './extensions/CalloutBlock';
 import { ToggleBlock } from './extensions/ToggleBlock';
 import { DatabaseBlockNode } from './extensions/DatabaseBlock';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import { IconPicker } from '../common/IconPicker';
 import { EditorToolbar } from './EditorToolbar';
-import { MinimalistEditorHeader } from './MinimalistEditorHeader';
 import { FindReplaceBar } from './FindReplaceBar';
 import { TableOfContents } from './TableOfContents';
 import { ContextMenu, ContextMenuPosition } from '../common/ContextMenu';
@@ -169,6 +169,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [lastIngestion, setLastIngestion] = useState<IngestionResult | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -815,8 +816,29 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               </div>
             )}
 
-            {/* Editable Note Title with Gray Suggested Title Placeholder */}
+            {/* Editable Note Title with Notion-style Icon & Gray Suggested Title Placeholder */}
             <div className="relative mb-4 pb-1 flex items-center gap-2">
+              <div className="relative flex-shrink-0 no-print">
+                <button
+                  type="button"
+                  onClick={() => setIsIconPickerOpen(!isIconPickerOpen)}
+                  className="w-8 h-8 rounded-lg hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center text-xl transition"
+                  title="Choose note icon"
+                >
+                  {note.icon ? (
+                    <span>{note.icon}</span>
+                  ) : (
+                    <FileText className="w-5 h-5 text-stone-300 dark:text-zinc-600 hover:text-stone-500" />
+                  )}
+                </button>
+                {isIconPickerOpen && (
+                  <IconPicker
+                    currentIcon={note.icon}
+                    onSelect={(icon) => onUpdateNote({ icon, updatedAt: Date.now() })}
+                    onClose={() => setIsIconPickerOpen(false)}
+                  />
+                )}
+              </div>
               <input
                 ref={titleInputRef}
                 type="text"

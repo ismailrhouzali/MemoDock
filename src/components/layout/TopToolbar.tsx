@@ -28,6 +28,7 @@ import {
   Eye,
   ZoomIn,
   ZoomOut,
+  HelpCircle,
 } from 'lucide-react';
 import { ThemeMode, WorkspaceView, WorkspaceLayoutPreset } from '../../db/types';
 
@@ -44,6 +45,7 @@ interface TopToolbarProps {
   onOpenAI: () => void;
   onOpenExport: () => void;
   onOpenShare?: () => void;
+  onOpenHelp?: () => void;
   onOpenSettings: () => void;
   onOpenTemplates?: () => void;
   focusMode: boolean;
@@ -70,6 +72,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   onOpenAI,
   onOpenExport,
   onOpenShare,
+  onOpenHelp,
   onOpenSettings,
   onOpenTemplates,
   focusMode,
@@ -361,6 +364,18 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               title="Share Note"
             >
               <Share2 className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Help & Getting Started Guide */}
+          {onOpenHelp && (
+            <button
+              type="button"
+              onClick={onOpenHelp}
+              className="p-1.5 text-stone-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-stone-100 dark:hover:bg-zinc-900 rounded-md transition"
+              title="Guide de démarrage & Personnalisation"
+            >
+              <HelpCircle className="w-4 h-4" />
             </button>
           )}
 

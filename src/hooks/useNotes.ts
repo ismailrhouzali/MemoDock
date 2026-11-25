@@ -210,10 +210,11 @@ export function useNotes(
     return folder;
   };
 
-  const updateFolder = async (id: string, name: string, color?: string) => {
+  const updateFolder = async (id: string, name: string, color?: string, icon?: string | null) => {
     await db.folders.update(id, {
       name: name.trim(),
       ...(color ? { color } : {}),
+      ...(icon !== undefined ? { icon: icon || undefined } : {}),
       updatedAt: Date.now(),
     });
   };

@@ -32,6 +32,7 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { AIAssistantModal } from './components/modals/AIAssistantModal';
 import { ExportModal } from './components/modals/ExportModal';
 import { ShareModal } from './components/modals/ShareModal';
+import { HelpModal } from './components/modals/HelpModal';
 import { ShortcutsModal } from './components/modals/ShortcutsModal';
 import { SearchModal } from './components/modals/SearchModal';
 import { TemplatesModal } from './components/modals/TemplatesModal';
@@ -61,6 +62,7 @@ export const App: React.FC = () => {
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
@@ -302,6 +304,7 @@ export const App: React.FC = () => {
         onOpenAI={() => setIsAIOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
         onOpenShare={() => setIsShareOpen(true)}
+        onOpenHelp={() => setIsHelpOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
         focusMode={focusMode}
@@ -351,6 +354,29 @@ export const App: React.FC = () => {
               });
               setWorkspaceView('notes');
             }
+          }}
+          onOpenRowAsPage={async (row, dbItem) => {
+            if (row.linkedNoteId) {
+              const existing = notes.find((n) => n.id === row.linkedNoteId);
+              if (existing) {
+                setActiveNoteId(existing.id);
+                setWorkspaceView('notes');
+                return;
+              }
+            }
+            const firstColId = dbItem.columns[0]?.id;
+            const rowTitle = String((firstColId && row.cells[firstColId]) || 'Untitled Page');
+            const newNote = await createNote({
+              title: rowTitle,
+              icon: dbItem.icon || '📄',
+              content: `<p>From database: <strong>${dbItem.title || 'New database'}</strong></p>`,
+            });
+            const updatedRows = dbItem.rows.map((r) =>
+              r.id === row.id ? { ...r, linkedNoteId: newNote.id } : r
+            );
+            await db.databases.update(dbItem.id, { rows: updatedRows, updatedAt: Date.now() });
+            setActiveNoteId(newNote.id);
+            setWorkspaceView('notes');
           }}
         />
       ) : workspaceView === 'documents' ? (
@@ -650,6 +676,13 @@ export const App: React.FC = () => {
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
         note={activeNote}
+      />
+
+      {/* Getting Started & Personalization Help Guide */}
+      <HelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* Shortcuts Modal */}
