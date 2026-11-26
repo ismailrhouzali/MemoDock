@@ -24,6 +24,7 @@ import { LinkCardNode } from './extensions/LinkCard';
 import { CalloutBlock } from './extensions/CalloutBlock';
 import { ToggleBlock } from './extensions/ToggleBlock';
 import { DatabaseBlockNode } from './extensions/DatabaseBlock';
+import { HtmlLiteBlock } from './extensions/HtmlLiteBlock';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { IconPicker } from '../common/IconPicker';
 import { EditorToolbar } from './EditorToolbar';
@@ -231,6 +232,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       CalloutBlock,
       ToggleBlock,
       DatabaseBlockNode,
+      HtmlLiteBlock,
     ],
     content: note.content || '',
     editorProps: {
