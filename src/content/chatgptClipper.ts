@@ -284,33 +284,27 @@ function createMemoDockButton(msgEl: HTMLElement): HTMLElement {
   return host;
 }
 
-function findAssistantTurns(): HTMLElement[] {
+function findAssistantMessages(): HTMLElement[] {
   const seen = new Set<HTMLElement>();
   const results: HTMLElement[] = [];
 
-  const direct = document.querySelectorAll(
-    '[data-message-author-role="assistant"], article[data-turn="assistant"]'
-  );
-  direct.forEach((el) => {
+  // 1. Primary: explicit assistant role elements
+  document.querySelectorAll('[data-message-author-role="assistant"]').forEach((el) => {
     const htmlEl = el as HTMLElement;
-    const container =
-      (htmlEl.closest('article') as HTMLElement) ||
-      (htmlEl.closest('[data-testid^="conversation-turn"]') as HTMLElement) ||
-      htmlEl;
-    if (!seen.has(container)) {
-      seen.add(container);
-      results.push(container);
+    if (!seen.has(htmlEl)) {
+      seen.add(htmlEl);
+      results.push(htmlEl);
     }
   });
 
-  // Fallback: conversation turns that contain markdown response and are not user turns
+  // 2. Fallback: .markdown blocks not inside a user message
   if (results.length === 0) {
-    document.querySelectorAll('[data-testid^="conversation-turn"], article').forEach((turn) => {
-      const t = turn as HTMLElement;
-      if (t.querySelector('[data-message-author-role="user"]')) return;
-      if (t.querySelector('.markdown, [data-testid="copy-turn-action-button"]') && !seen.has(t)) {
-        seen.add(t);
-        results.push(t);
+    document.querySelectorAll('.markdown, .prose').forEach((el) => {
+      const htmlEl = el as HTMLElement;
+      if (htmlEl.closest('[data-message-author-role="user"]')) return;
+      if (!seen.has(htmlEl)) {
+        seen.add(htmlEl);
+        results.push(htmlEl);
       }
     });
   }
@@ -319,47 +313,49 @@ function findAssistantTurns(): HTMLElement[] {
 }
 
 function injectButtons() {
-  const turns = findAssistantTurns();
+  const messages = findAssistantMessages();
   let injected = 0;
 
-  turns.forEach((container) => {
-    if (container.querySelector(`[${BUTTON_ATTR}]`)) return;
+  messages.forEach((msgEl) => {
+    const scope =
+      msgEl.closest('article') ||
+      msgEl.closest('[data-testid^="conversation-turn"]') ||
+      msgEl.parentElement ||
+      msgEl;
 
-    const msgEl =
-      (container.querySelector('[data-message-author-role="assistant"]') as HTMLElement) ||
-      (container.querySelector('.markdown') as HTMLElement) ||
-      container;
-
-    const btnHost = createMemoDockButton(msgEl);
-
-    // Prefer the turn-level bottom action bar (never a code-block Copy button inside .markdown)
-    const turnCopyBtn = container.querySelector('[data-testid="copy-turn-action-button"]');
-    const allCopyBtns = Array.from(
-      container.querySelectorAll('button[aria-label*="Copy" i], button[aria-label*="Copier" i]')
-    ).filter((el) => !el.closest('.markdown, pre, code'));
-    const copyBtn = turnCopyBtn || allCopyBtns[allCopyBtns.length - 1] || null;
-
-    // Walk up only to the immediate flex toolbar row holding the action icons
-    let actionBar: Element | null = copyBtn?.parentElement || null;
-    if (actionBar && actionBar.children.length === 1 && actionBar.parentElement) {
-      // Unwrap single-button tooltip wrapper <span>/<div>
-      actionBar = actionBar.parentElement;
+    if (scope.querySelector(`[${BUTTON_ATTR}]`) || msgEl.nextElementSibling?.hasAttribute(BUTTON_ATTR)) {
+      return;
     }
 
-    if (actionBar) {
-      actionBar.appendChild(btnHost);
+    const bar = document.createElement('div');
+    bar.setAttribute(BUTTON_ATTR, 'true');
+    bar.style.cssText = [
+      'display:flex !important',
+      'justify-content:flex-end !important',
+      'align-items:center !important',
+      'width:100% !important',
+      'margin:8px 0 4px 0 !important',
+      'padding:0 !important',
+      'opacity:1 !important',
+      'visibility:visible !important',
+      'position:relative !important',
+      'z-index:30 !important',
+    ].join(';');
+
+    const btnHost = createMemoDockButton(msgEl);
+    bar.appendChild(btnHost);
+
+    const anchor = (msgEl.querySelector('.markdown') as HTMLElement) || msgEl;
+    if (anchor.parentElement) {
+      anchor.insertAdjacentElement('afterend', bar);
     } else {
-      msgEl.style.position = 'relative';
-      btnHost.style.position = 'absolute';
-      btnHost.style.bottom = '4px';
-      btnHost.style.right = '4px';
-      msgEl.appendChild(btnHost);
+      msgEl.appendChild(bar);
     }
     injected++;
   });
 
   if (injected > 0) {
-    console.info(`[MemoDock] Injected ${injected} button(s) (turns detected: ${turns.length})`);
+    console.info(`[MemoDock] Injected ${injected} button(s) (messages: ${messages.length})`);
   }
 }
 
