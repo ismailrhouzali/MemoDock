@@ -81,90 +81,118 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
   html: string;
   plainText: string;
 } {
+  // Always pick the actual assistant .markdown block, never a full conversation wrapper with user prompts
+  const markdowns = Array.from(messageEl.querySelectorAll('.markdown')).filter(
+    (el) => !el.closest('[data-message-author-role="user"]')
+  );
   const contentRoot =
-    (messageEl.querySelector('.markdown') as HTMLElement) ||
+    (messageEl.classList.contains('markdown') ? messageEl : null) ||
+    (markdowns[markdowns.length - 1] as HTMLElement) ||
     (messageEl.querySelector('[data-message-id]') as HTMLElement) ||
     messageEl;
 
   const clone = contentRoot.cloneNode(true) as HTMLElement;
 
-  // 1. Remove ChatGPT interactive buttons, toolbars & raw <style>/<script> tags
-  clone
-    .querySelectorAll('button, script, style, [data-memodock-btn], .sr-only')
-    .forEach((el) => el.remove());
-
-  // 2. Convert large/diagram SVGs (like Mermaid charts) to crisp self-contained <img>
-  const liveSvgs = Array.from(contentRoot.querySelectorAll('svg'));
-  const cloneSvgs = Array.from(clone.querySelectorAll('svg'));
-  liveSvgs.forEach((liveSvg, idx) => {
-    const cSvg = cloneSvgs[idx];
-    if (!cSvg) return;
-    const r = liveSvg.getBoundingClientRect();
-    const isDiagram =
-      liveSvg.id.includes('mermaid') ||
-      !!liveSvg.closest('[class*="mermaid"]') ||
-      r.width > 80 ||
-      r.height > 80;
-    if (isDiagram) {
-      serializeSvgToImage(liveSvg, cSvg);
-    } else if (r.width === 0 && r.height === 0) {
-      cSvg.remove();
-    }
-  });
-
-  // 3. Inline essential visual styles on cards, tables, badges, progress bars, code & typography
+  // 1. Walk liveNodes & cloneNodes 1-to-1 BEFORE any removals so indices NEVER shift!
   const liveNodes = Array.from(contentRoot.querySelectorAll('*'));
   const cloneNodes = Array.from(clone.querySelectorAll('*'));
+  const svgsToSerialize: Array<{ live: SVGSVGElement; clone: Element }> = [];
+  const svgsToRemove: Element[] = [];
+
+  const SKIP_FLEX_TAGS = new Set([
+    'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD',
+    'P', 'LI', 'UL', 'OL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+    'STRONG', 'EM', 'B', 'I', 'CODE', 'PRE', 'BLOCKQUOTE', 'A',
+  ]);
+
   liveNodes.forEach((liveNode, idx) => {
-    const cNode = cloneNodes[idx] as HTMLElement | undefined;
-    if (!cNode || cNode.tagName === 'IMG' || cNode.tagName === 'SVG') return;
+    const cNode = cloneNodes[idx];
+    if (!cNode) return;
+
+    // Collect diagram SVGs (skip small UI icons inside buttons)
+    if (liveNode.tagName.toLowerCase() === 'svg') {
+      if (liveNode.closest('button, [data-memodock-btn]')) return;
+      const liveSvg = liveNode as unknown as SVGSVGElement;
+      const r = liveSvg.getBoundingClientRect();
+      const isDiagram =
+        liveSvg.id.includes('mermaid') ||
+        !!liveSvg.closest('[class*="mermaid"]') ||
+        r.width > 80 ||
+        r.height > 80;
+      if (isDiagram) {
+        svgsToSerialize.push({ live: liveSvg, clone: cNode });
+      } else if (r.width === 0 && r.height === 0) {
+        svgsToRemove.push(cNode);
+      }
+      return;
+    }
+
+    // Skip SVG internals & IMG
+    if (liveNode.closest('svg') || cNode.tagName === 'IMG') return;
+
+    const cEl = cNode as HTMLElement;
     const cs = window.getComputedStyle(liveNode);
 
-    // Preserve card/badge/code backgrounds, borders, shadows & padding
+    // Preserve card/badge/code backgrounds, borders & shadows (resolved RGB values from getComputedStyle)
     const bg = cs.backgroundColor;
     if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-      cNode.style.backgroundColor = bg;
+      cEl.style.backgroundColor = bg;
     }
     if (cs.borderWidth && parseFloat(cs.borderWidth) > 0 && cs.borderStyle !== 'none') {
-      cNode.style.border = `${cs.borderWidth} ${cs.borderStyle} ${cs.borderColor}`;
+      cEl.style.border = `${cs.borderWidth} ${cs.borderStyle} ${cs.borderColor}`;
     }
-    if (cs.borderRadius && parseFloat(cs.borderRadius) > 0) {
-      cNode.style.borderRadius = cs.borderRadius;
+    if (cs.borderRadius && parseFloat(cs.borderRadius) > 0 && !SKIP_FLEX_TAGS.has(cEl.tagName)) {
+      cEl.style.borderRadius = cs.borderRadius;
     }
     if (cs.boxShadow && cs.boxShadow !== 'none') {
-      cNode.style.boxShadow = cs.boxShadow;
+      cEl.style.boxShadow = cs.boxShadow;
     }
-    if (cs.padding && cs.padding !== '0px') {
-      cNode.style.padding = cs.padding;
+    if (cs.padding && cs.padding !== '0px' && (cEl.tagName === 'DIV' || cEl.tagName === 'SPAN' || cEl.tagName === 'PRE' || cEl.tagName === 'BLOCKQUOTE')) {
+      cEl.style.padding = cs.padding;
     }
     if (cs.color) {
-      cNode.style.color = cs.color;
+      cEl.style.color = cs.color;
     }
     if (cs.fontWeight && Number(cs.fontWeight) >= 600) {
-      cNode.style.fontWeight = cs.fontWeight;
+      cEl.style.fontWeight = cs.fontWeight;
     }
-    // Preserve flex/grid & progress bar widths
-    if (cs.display === 'flex' || cs.display === 'inline-flex' || cs.display === 'grid') {
-      cNode.style.display = cs.display;
-      if (cs.gap && cs.gap !== 'normal') cNode.style.gap = cs.gap;
-      if (cs.flexWrap === 'wrap') cNode.style.flexWrap = 'wrap';
-      if (cs.alignItems && cs.alignItems !== 'normal') cNode.style.alignItems = cs.alignItems;
-      if (cs.justifyContent && cs.justifyContent !== 'normal') cNode.style.justifyContent = cs.justifyContent;
+    // Preserve flex/grid ONLY on layout containers (never on table rows, cells, paragraphs or headings)
+    if (!SKIP_FLEX_TAGS.has(cEl.tagName)) {
+      if (cs.display === 'flex' || cs.display === 'inline-flex' || cs.display === 'grid') {
+        cEl.style.display = cs.display;
+        if (cs.gap && cs.gap !== 'normal') cEl.style.gap = cs.gap;
+        if (cs.flexWrap === 'wrap') cEl.style.flexWrap = 'wrap';
+        if (cs.alignItems && cs.alignItems !== 'normal') cEl.style.alignItems = cs.alignItems;
+        if (cs.justifyContent && cs.justifyContent !== 'normal') cEl.style.justifyContent = cs.justifyContent;
+        if (cs.gridTemplateColumns && cs.gridTemplateColumns !== 'none') {
+          cEl.style.gridTemplateColumns = cs.gridTemplateColumns;
+        }
+      }
+      if ((liveNode as HTMLElement).style?.width) {
+        cEl.style.width = (liveNode as HTMLElement).style.width;
+      }
+      if (cs.height && parseFloat(cs.height) <= 12 && parseFloat(cs.height) >= 4 && bg && bg !== 'rgba(0, 0, 0, 0)') {
+        cEl.style.height = cs.height;
+      }
     }
-    if ((liveNode as HTMLElement).style?.width) {
-      cNode.style.width = (liveNode as HTMLElement).style.width;
-    }
-    if (cs.height && parseFloat(cs.height) <= 12 && bg && bg !== 'rgba(0, 0, 0, 0)') {
-      cNode.style.height = cs.height;
-    }
-    if (cNode.tagName === 'INPUT' && (liveNode as HTMLInputElement).type === 'checkbox') {
+
+    if (cEl.tagName === 'INPUT' && (liveNode as HTMLInputElement).type === 'checkbox') {
       if ((liveNode as HTMLInputElement).checked) {
-        cNode.setAttribute('checked', 'checked');
+        cEl.setAttribute('checked', 'checked');
       } else {
-        cNode.removeAttribute('checked');
+        cEl.removeAttribute('checked');
       }
     }
   });
+
+  // 2. Convert Mermaid/diagram SVGs to crisp self-contained <img>
+  svgsToSerialize.forEach(({ live, clone: cSvg }) => serializeSvgToImage(live, cSvg));
+  svgsToRemove.forEach((el) => el.remove());
+
+  // 3. Remove ChatGPT interactive buttons, hidden placeholders & raw <style>/<script> tags AFTER style sync
+  clone
+    .querySelectorAll('button, script, style, [data-memodock-btn], .sr-only, [hidden], [aria-hidden="true"]')
+    .forEach((el) => el.remove());
 
   // 4. Clean up class attributes and ensure images/tables look great
   clone.querySelectorAll('img').forEach((img) => {
