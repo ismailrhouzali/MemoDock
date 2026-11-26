@@ -320,6 +320,8 @@ function findAssistantTurns(): HTMLElement[] {
 
 function injectButtons() {
   const turns = findAssistantTurns();
+  let injected = 0;
+
   turns.forEach((container) => {
     if (container.querySelector(`[${BUTTON_ATTR}]`)) return;
 
@@ -330,29 +332,42 @@ function injectButtons() {
 
     const btnHost = createMemoDockButton(msgEl);
 
-    // Try attaching inside ChatGPT's native action bar next to Copy button; fallback to top-right of message
-    const copyBtn =
-      container.querySelector('[data-testid="copy-turn-action-button"]') ||
-      container.querySelector('button[aria-label*="Copy" i], button[aria-label*="Copier" i]');
-    const actionBar =
-      copyBtn?.closest('div.flex, div[class*="items-center"]') || copyBtn?.parentElement;
+    // Prefer the turn-level bottom action bar (never a code-block Copy button inside .markdown)
+    const turnCopyBtn = container.querySelector('[data-testid="copy-turn-action-button"]');
+    const allCopyBtns = Array.from(
+      container.querySelectorAll('button[aria-label*="Copy" i], button[aria-label*="Copier" i]')
+    ).filter((el) => !el.closest('.markdown, pre, code'));
+    const copyBtn = turnCopyBtn || allCopyBtns[allCopyBtns.length - 1] || null;
+
+    // Walk up only to the immediate flex toolbar row holding the action icons
+    let actionBar: Element | null = copyBtn?.parentElement || null;
+    if (actionBar && actionBar.children.length === 1 && actionBar.parentElement) {
+      // Unwrap single-button tooltip wrapper <span>/<div>
+      actionBar = actionBar.parentElement;
+    }
 
     if (actionBar) {
       actionBar.appendChild(btnHost);
     } else {
       msgEl.style.position = 'relative';
       btnHost.style.position = 'absolute';
-      btnHost.style.top = '4px';
+      btnHost.style.bottom = '4px';
       btnHost.style.right = '4px';
       msgEl.appendChild(btnHost);
     }
+    injected++;
   });
+
+  if (injected > 0) {
+    console.info(`[MemoDock] Injected ${injected} button(s) (turns detected: ${turns.length})`);
+  }
 }
 
 console.info('[MemoDock] ChatGPT Clipper active');
 
-// Initial scan + MutationObserver for streaming ChatGPT responses
+// Initial scan + MutationObserver + periodic fallback for SPA navigation/hydration
 injectButtons();
+window.setInterval(injectButtons, 2000);
 let scanTimer: number | null = null;
 const observer = new MutationObserver(() => {
   if (scanTimer) window.clearTimeout(scanTimer);
