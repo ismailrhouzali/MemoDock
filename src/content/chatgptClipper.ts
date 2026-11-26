@@ -147,7 +147,7 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     if (cs.boxShadow && cs.boxShadow !== 'none') {
       cEl.style.boxShadow = cs.boxShadow;
     }
-    if (cs.padding && cs.padding !== '0px' && (cEl.tagName === 'DIV' || cEl.tagName === 'SPAN' || cEl.tagName === 'PRE' || cEl.tagName === 'BLOCKQUOTE')) {
+    if (cs.padding && cs.padding !== '0px' && !cEl.querySelector('table') && (cEl.tagName === 'DIV' || cEl.tagName === 'SPAN' || cEl.tagName === 'PRE' || cEl.tagName === 'BLOCKQUOTE')) {
       cEl.style.padding = cs.padding;
     }
     if (cs.color) {
@@ -189,9 +189,9 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
   svgsToSerialize.forEach(({ live, clone: cSvg }) => serializeSvgToImage(live, cSvg));
   svgsToRemove.forEach((el) => el.remove());
 
-  // 3. Remove ChatGPT interactive buttons, hidden placeholders & raw <style>/<script> tags AFTER style sync
+  // 3. Remove ChatGPT interactive buttons, user prompt bubbles, hidden placeholders & raw <style>/<script> tags AFTER style sync
   clone
-    .querySelectorAll('button, script, style, [data-memodock-btn], .sr-only, [hidden], [aria-hidden="true"]')
+    .querySelectorAll('button, script, style, [data-memodock-btn], [data-message-author-role="user"], .sr-only, [hidden], [aria-hidden="true"]')
     .forEach((el) => el.remove());
 
   // 4. Clean up class attributes and ensure images/tables look great
