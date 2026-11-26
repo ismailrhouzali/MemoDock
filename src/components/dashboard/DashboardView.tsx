@@ -79,7 +79,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {[
             { label: 'Active Notes', value: activeNotes.length, icon: FileText, color: 'text-blue-600', view: 'notes' as WorkspaceView },
             { label: 'Folders', value: folders.length, icon: FolderIcon, color: 'text-amber-600', view: 'notes' as WorkspaceView },
-            { label: 'Databases', value: databases.length, icon: Database, color: 'text-emerald-600', view: 'databases' as WorkspaceView },
+            { label: 'PDF Documents', value: databases.length, icon: Database, color: 'text-emerald-600', view: 'documents' as WorkspaceView },
             { label: 'Favorites', value: activeNotes.filter((n) => n.isFavorite).length, icon: Star, color: 'text-purple-600', view: 'notes' as WorkspaceView },
           ].map((stat) => {
             const Icon = stat.icon;

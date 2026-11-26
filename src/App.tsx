@@ -24,7 +24,6 @@ import { Sidebar } from './components/layout/Sidebar';
 import { StatusBar } from './components/layout/StatusBar';
 import { TipTapEditor } from './components/editor/TipTapEditor';
 import { DocumentHub } from './components/pdf/DocumentHub';
-import { DatabaseView } from './components/database/DatabaseView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { useLiveQuery } from 'dexie-react-hooks';
 
@@ -342,43 +341,6 @@ export const App: React.FC = () => {
             setWorkspaceView('notes');
           }}
         />
-      ) : workspaceView === 'databases' ? (
-        <DatabaseView
-          onInsertDatabaseInNote={(dbItem) => {
-            if (activeNote) {
-              handleUpdateActiveNote({
-                content:
-                  (activeNote.content || '') +
-                  `<div data-type="database-block" data-database-id="${dbItem.id}" data-title="${dbItem.title}"></div>`,
-                updatedAt: Date.now(),
-              });
-              setWorkspaceView('notes');
-            }
-          }}
-          onOpenRowAsPage={async (row, dbItem) => {
-            if (row.linkedNoteId) {
-              const existing = notes.find((n) => n.id === row.linkedNoteId);
-              if (existing) {
-                setActiveNoteId(existing.id);
-                setWorkspaceView('notes');
-                return;
-              }
-            }
-            const firstColId = dbItem.columns[0]?.id;
-            const rowTitle = String((firstColId && row.cells[firstColId]) || 'Untitled Page');
-            const newNote = await createNote({
-              title: rowTitle,
-              icon: dbItem.icon || '📄',
-              content: `<p>From database: <strong>${dbItem.title || 'New database'}</strong></p>`,
-            });
-            const updatedRows = dbItem.rows.map((r) =>
-              r.id === row.id ? { ...r, linkedNoteId: newNote.id } : r
-            );
-            await db.databases.update(dbItem.id, { rows: updatedRows, updatedAt: Date.now() });
-            setActiveNoteId(newNote.id);
-            setWorkspaceView('notes');
-          }}
-        />
       ) : workspaceView === 'documents' ? (
         <DocumentHub
           onNavigateToNote={(targetId) => {
@@ -532,20 +494,6 @@ export const App: React.FC = () => {
                   >
                     PDF & Docs
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSplitRightView('databases');
-                      settingsStorage.set({ splitRightView: 'databases' });
-                    }}
-                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
-                      splitRightView === 'databases'
-                        ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                        : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-                    }`}
-                  >
-                    Databases
-                  </button>
                 </div>
                 <button
                   type="button"
@@ -579,8 +527,6 @@ export const App: React.FC = () => {
                       <p className="text-xs">Sélectionnez une note pour afficher l'aperçu Markdown.</p>
                     </div>
                   )
-                ) : splitRightView === 'databases' ? (
-                  <DatabaseView />
                 ) : (
                   <DocumentHub
                     onNavigateToNote={(targetId) => {

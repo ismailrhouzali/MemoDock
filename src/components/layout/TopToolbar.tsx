@@ -208,20 +208,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
 
             <button
               type="button"
-              onClick={() => onSelectWorkspaceView('databases')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium ${
-                workspaceView === 'databases'
-                  ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-2xs font-semibold'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-              title="Databases (Table, Board, Gallery & XLSX/CSV Import)"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Databases</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => onSelectWorkspaceView('documents')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium ${
                 workspaceView === 'documents'

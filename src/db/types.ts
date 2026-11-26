@@ -19,6 +19,7 @@ export interface Note {
   internalLinks?: string[]; // Note IDs or titles referenced via [[title]]
   backlinks?: string[]; // Note IDs that link to this note
   isAutoTitle?: boolean; // Whether note title was automatically extracted from content
+  isDashboard?: boolean; // Transform note into an interactive Dashboard view
   order?: number; // Custom drag-and-drop sort order position
 }
 
@@ -66,7 +67,7 @@ export interface ResourceCollection {
   createdAt: number;
 }
 
-export type WorkspaceView = 'notes' | 'dashboard' | 'databases' | 'documents';
+export type WorkspaceView = 'notes' | 'dashboard' | 'documents';
 
 export type DatabaseColumnType =
   | 'text'

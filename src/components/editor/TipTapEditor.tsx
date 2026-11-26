@@ -643,6 +643,10 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               onOpenImport={() => setIsImportOpen(true)}
               onToggleToc={() => setShowToc(!showToc)}
               showToc={showToc}
+              isNoteDashboard={!!note.isDashboard}
+              onToggleNoteDashboard={() =>
+                onUpdateNote({ isDashboard: !note.isDashboard, updatedAt: Date.now() })
+              }
             />
             {showFindReplace && (
               <FindReplaceBar
@@ -655,7 +659,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
         {/* Editor Main Canvas Scroll Area */}
         <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
-          <div className={`mx-auto ${widthClasses} ${fontClasses} transition-all duration-200`}>
+          <div className={`mx-auto ${note.isDashboard ? 'max-w-6xl' : widthClasses} ${fontClasses} transition-all duration-200`}>
             
             {/* Breadcrumb Navigation */}
             {showBreadcrumbs && (
@@ -879,6 +883,61 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Note-as-Dashboard Overview Cards (when note.isDashboard is active) */}
+            {note.isDashboard && (() => {
+              const htmlStr = note.content || '';
+              const totalTasks = (htmlStr.match(/data-type="taskItem"/g) || []).length;
+              const doneTasks = (htmlStr.match(/data-checked="true"/g) || []).length;
+              const tablesCount = (htmlStr.match(/data-type="database-block"|<table/g) || []).length;
+              const subPagesList = allNotes.filter((n) => n.parentNoteId === note.id && !n.isTrash);
+              const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+              return (
+                <div className="no-print mb-6 p-4 rounded-2xl border border-purple-200/70 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-white to-blue-50/50 dark:from-purple-950/20 dark:via-zinc-900 dark:to-blue-950/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                      Note Dashboard Mode
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateNote({ isDashboard: false, updatedAt: Date.now() })}
+                      className="text-[11px] px-2 py-0.5 rounded-md border border-stone-200 dark:border-zinc-700 hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-600 dark:text-zinc-300"
+                    >
+                      Back to Standard Note
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-zinc-900/80 border border-stone-200/70 dark:border-zinc-800">
+                      <div className="text-[10px] text-stone-400 uppercase font-semibold">Tasks Progress</div>
+                      <div className="text-lg font-bold text-stone-900 dark:text-zinc-100 mt-0.5">
+                        {doneTasks} / {totalTasks} <span className="text-xs font-normal text-stone-400">({pct}%)</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-stone-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
+                        <div className="h-full bg-blue-600 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-zinc-900/80 border border-stone-200/70 dark:border-zinc-800">
+                      <div className="text-[10px] text-stone-400 uppercase font-semibold">Smart Tables</div>
+                      <div className="text-lg font-bold text-emerald-600 mt-0.5">{tablesCount}</div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">Embedded in note</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-zinc-900/80 border border-stone-200/70 dark:border-zinc-800">
+                      <div className="text-[10px] text-stone-400 uppercase font-semibold">Sub-pages</div>
+                      <div className="text-lg font-bold text-blue-600 mt-0.5">{subPagesList.length}</div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">Linked child notes</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-zinc-900/80 border border-stone-200/70 dark:border-zinc-800">
+                      <div className="text-[10px] text-stone-400 uppercase font-semibold">Updated</div>
+                      <div className="text-sm font-bold text-stone-800 dark:text-zinc-200 mt-1">
+                        {new Date(note.updatedAt).toLocaleDateString()}
+                      </div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">{note.tags.length} tags</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Floating Bubble Menu on text selection */}
             {editor && (

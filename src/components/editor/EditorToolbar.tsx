@@ -33,7 +33,10 @@ import {
   ChevronDown,
   FileSpreadsheet,
   MoreHorizontal,
+  Smile,
+  LayoutDashboard,
 } from 'lucide-react';
+import { IconPicker } from '../common/IconPicker';
 import { pdfStorageService } from '../../services/pdfStorageService';
 import { spreadsheetService } from '../../services/spreadsheet/spreadsheetService';
 
@@ -46,6 +49,8 @@ interface EditorToolbarProps {
   onOpenImport?: () => void;
   onToggleToc?: () => void;
   showToc?: boolean;
+  isNoteDashboard?: boolean;
+  onToggleNoteDashboard?: () => void;
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -57,6 +62,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onOpenImport,
   onToggleToc,
   showToc = false,
+  isNoteDashboard = false,
+  onToggleNoteDashboard,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +74,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isHighlightOpen, setIsHighlightOpen] = useState(false);
   const [activeHighlightColor, setActiveHighlightColor] = useState('#fef08a');
+  const [emojiPickerRect, setEmojiPickerRect] = useState<{ top: number; left: number; bottom: number } | null>(null);
 
   const headingsRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -451,6 +459,21 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 <Plus className="w-3.5 h-3.5" />
                 <span>Insert 3x3 Table</span>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContent('<div data-type="database-block" data-database-id="" data-title="Smart Table"></div>')
+                    .run();
+                  setIsTableMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Smart Excel Table</span>
+              </button>
               {editor.isActive('table') && (
                 <>
                   <button
@@ -539,7 +562,33 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         <div className="w-[1px] h-4 bg-stone-200 dark:bg-zinc-800 mx-1" />
 
-        {/* GROUP 7: INSERTS (Link, Image) */}
+        {/* GROUP 7: INSERTS (Emoji, Link, Image) */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setEmojiPickerRect(
+                emojiPickerRect ? null : { top: r.top, left: r.left, bottom: r.bottom }
+              );
+            }}
+            className={btnClass(!!emojiPickerRect)}
+            title="Insert Emoji in Note"
+          >
+            <Smile className="w-3.5 h-3.5 text-amber-500" />
+          </button>
+          {emojiPickerRect && (
+            <IconPicker
+              anchorRect={emojiPickerRect}
+              onSelect={(emoji) => {
+                if (emoji) {
+                  editor.chain().focus().insertContent(emoji).run();
+                }
+              }}
+              onClose={() => setEmojiPickerRect(null)}
+            />
+          )}
+        </div>
         <button
           type="button"
           onClick={setLink}
@@ -587,6 +636,18 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         >
           <Search className="w-3.5 h-3.5" />
         </button>
+
+        {/* Transform Note as Dashboard Toggle */}
+        {onToggleNoteDashboard && (
+          <button
+            type="button"
+            onClick={onToggleNoteDashboard}
+            className={btnClass(isNoteDashboard)}
+            title={isNoteDashboard ? 'Exit Note Dashboard Mode' : 'Transform Note into Dashboard'}
+          >
+            <LayoutDashboard className={`w-3.5 h-3.5 ${isNoteDashboard ? 'text-purple-600' : ''}`} />
+          </button>
+        )}
 
         {/* Outline Toggle */}
         {onToggleToc && (

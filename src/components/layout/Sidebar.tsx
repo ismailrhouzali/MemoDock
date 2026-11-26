@@ -1063,7 +1063,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-b border-stone-200/60 dark:border-zinc-800/60 flex items-center justify-between">
         <span className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-zinc-400 flex items-center gap-1.5">
           {workspaceView === 'notes' && <FileText className="w-3.5 h-3.5 text-blue-600" />}
-          {workspaceView === 'databases' && <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />}
           {workspaceView === 'documents' && <Files className="w-3.5 h-3.5 text-red-500" />}
           {workspaceView === 'dashboard' && <Bookmark className="w-3.5 h-3.5 text-purple-600" />}
           <span className="capitalize">{workspaceView}</span>
@@ -1521,8 +1520,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
           </div>
         </div>
-      ) : workspaceView === 'databases' ? (
-        /* DATABASES CONTEXTUAL SIDEBAR */
+      ) : workspaceView === 'dashboard' ? (
+        /* DASHBOARD CONTEXTUAL SIDEBAR */
         <div className="p-3 space-y-4 flex-1 overflow-y-auto">
           <div>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
