@@ -195,7 +195,12 @@ function injectButtons() {
   const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
   assistantMessages.forEach((msg) => {
     const msgEl = msg as HTMLElement;
-    const container = msgEl.closest('article') || msgEl.parentElement || msgEl;
+    const container =
+      msgEl.closest('article') ||
+      msgEl.closest('[data-testid^="conversation-turn"]') ||
+      msgEl.parentElement?.parentElement ||
+      msgEl.parentElement ||
+      msgEl;
     if (container.querySelector(`[${BUTTON_ATTR}]`)) return;
 
     const btn = document.createElement('button');
@@ -206,14 +211,16 @@ function injectButtons() {
     btn.style.cssText = [
       'display:inline-flex',
       'align-items:center',
+      'flex-shrink:0',
       'gap:5px',
       'padding:4px 9px',
       'border-radius:8px',
-      'border:1px solid rgba(120,113,108,0.25)',
-      'background:rgba(255,255,255,0.9)',
+      'border:1px solid rgba(120,113,108,0.28)',
+      'background:rgba(255,255,255,0.92)',
       'color:#2563eb',
       'cursor:pointer',
       'font-family:system-ui,-apple-system,sans-serif',
+      'line-height:1.2',
       'transition:all 0.15s ease',
       'margin-left:6px',
       'z-index:20',
@@ -266,9 +273,11 @@ function injectButtons() {
     });
 
     // Try attaching inside ChatGPT's native action bar next to Copy button; fallback to top-right of message
+    const copyBtn =
+      container.querySelector('[data-testid="copy-turn-action-button"]') ||
+      container.querySelector('button[aria-label*="Copy" i], button[aria-label*="Copier" i]');
     const actionBar =
-      container.querySelector('[data-testid="copy-turn-action-button"]')?.parentElement ||
-      container.querySelector('button[aria-label*="Copy"], button[aria-label*="Copier"]')?.parentElement;
+      copyBtn?.closest('div.flex, div[class*="items-center"]') || copyBtn?.parentElement;
 
     if (actionBar) {
       actionBar.appendChild(btn);

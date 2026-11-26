@@ -5,20 +5,7 @@
     <link rel="icon" type="image/png" href="/icons/icon32.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MemoDock</title>
-    <script>
-      // Immediately open MemoDock in a dedicated full tab on clicking the extension icon
-      try {
-        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
-          chrome.tabs.create({ url: chrome.runtime.getURL('index.html') });
-          window.close();
-        } else {
-          window.open('/index.html', '_blank');
-          window.close();
-        }
-      } catch (err) {
-        // Fallback to normal popup if restricted
-      }
-    </script>
+    <script src="/popup-redirect.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
