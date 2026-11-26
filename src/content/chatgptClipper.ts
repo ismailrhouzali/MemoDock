@@ -112,7 +112,7 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     }
   });
 
-  // 3. Inline essential visual styles on cards, tables, badges, progress bars & images
+  // 3. Inline essential visual styles on cards, tables, badges, progress bars, code & typography
   const liveNodes = Array.from(contentRoot.querySelectorAll('*'));
   const cloneNodes = Array.from(clone.querySelectorAll('*'));
   liveNodes.forEach((liveNode, idx) => {
@@ -120,7 +120,7 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     if (!cNode || cNode.tagName === 'IMG' || cNode.tagName === 'SVG') return;
     const cs = window.getComputedStyle(liveNode);
 
-    // Preserve card backgrounds, borders, badges & progress bar fills
+    // Preserve card/badge/code backgrounds, borders, shadows & padding
     const bg = cs.backgroundColor;
     if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
       cNode.style.backgroundColor = bg;
@@ -130,6 +130,18 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     }
     if (cs.borderRadius && parseFloat(cs.borderRadius) > 0) {
       cNode.style.borderRadius = cs.borderRadius;
+    }
+    if (cs.boxShadow && cs.boxShadow !== 'none') {
+      cNode.style.boxShadow = cs.boxShadow;
+    }
+    if (cs.padding && cs.padding !== '0px') {
+      cNode.style.padding = cs.padding;
+    }
+    if (cs.color) {
+      cNode.style.color = cs.color;
+    }
+    if (cs.fontWeight && Number(cs.fontWeight) >= 600) {
+      cNode.style.fontWeight = cs.fontWeight;
     }
     // Preserve flex/grid & progress bar widths
     if (cs.display === 'flex' || cs.display === 'inline-flex' || cs.display === 'grid') {
@@ -144,6 +156,13 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     }
     if (cs.height && parseFloat(cs.height) <= 12 && bg && bg !== 'rgba(0, 0, 0, 0)') {
       cNode.style.height = cs.height;
+    }
+    if (cNode.tagName === 'INPUT' && (liveNode as HTMLInputElement).type === 'checkbox') {
+      if ((liveNode as HTMLInputElement).checked) {
+        cNode.setAttribute('checked', 'checked');
+      } else {
+        cNode.removeAttribute('checked');
+      }
     }
   });
 
