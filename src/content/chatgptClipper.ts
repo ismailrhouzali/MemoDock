@@ -284,17 +284,49 @@ function createMemoDockButton(msgEl: HTMLElement): HTMLElement {
   return host;
 }
 
-function injectButtons() {
-  const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
-  assistantMessages.forEach((msg) => {
-    const msgEl = msg as HTMLElement;
+function findAssistantTurns(): HTMLElement[] {
+  const seen = new Set<HTMLElement>();
+  const results: HTMLElement[] = [];
+
+  const direct = document.querySelectorAll(
+    '[data-message-author-role="assistant"], article[data-turn="assistant"]'
+  );
+  direct.forEach((el) => {
+    const htmlEl = el as HTMLElement;
     const container =
-      msgEl.closest('article') ||
-      msgEl.closest('[data-testid^="conversation-turn"]') ||
-      msgEl.parentElement?.parentElement ||
-      msgEl.parentElement ||
-      msgEl;
+      (htmlEl.closest('article') as HTMLElement) ||
+      (htmlEl.closest('[data-testid^="conversation-turn"]') as HTMLElement) ||
+      htmlEl;
+    if (!seen.has(container)) {
+      seen.add(container);
+      results.push(container);
+    }
+  });
+
+  // Fallback: conversation turns that contain markdown response and are not user turns
+  if (results.length === 0) {
+    document.querySelectorAll('[data-testid^="conversation-turn"], article').forEach((turn) => {
+      const t = turn as HTMLElement;
+      if (t.querySelector('[data-message-author-role="user"]')) return;
+      if (t.querySelector('.markdown, [data-testid="copy-turn-action-button"]') && !seen.has(t)) {
+        seen.add(t);
+        results.push(t);
+      }
+    });
+  }
+
+  return results;
+}
+
+function injectButtons() {
+  const turns = findAssistantTurns();
+  turns.forEach((container) => {
     if (container.querySelector(`[${BUTTON_ATTR}]`)) return;
+
+    const msgEl =
+      (container.querySelector('[data-message-author-role="assistant"]') as HTMLElement) ||
+      (container.querySelector('.markdown') as HTMLElement) ||
+      container;
 
     const btnHost = createMemoDockButton(msgEl);
 
@@ -316,6 +348,8 @@ function injectButtons() {
     }
   });
 }
+
+console.info('[MemoDock] ChatGPT Clipper active');
 
 // Initial scan + MutationObserver for streaming ChatGPT responses
 injectButtons();
