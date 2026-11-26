@@ -289,7 +289,7 @@ function findAssistantMessages(): HTMLElement[] {
   const results: HTMLElement[] = [];
 
   // 1. Primary: explicit assistant role elements
-  document.querySelectorAll('[data-message-author-role="assistant"]').forEach((el) => {
+  document.querySelectorAll('[data-message-author-role="assistant"], [data-turn="assistant"]').forEach((el) => {
     const htmlEl = el as HTMLElement;
     if (!seen.has(htmlEl)) {
       seen.add(htmlEl);
@@ -297,7 +297,7 @@ function findAssistantMessages(): HTMLElement[] {
     }
   });
 
-  // 2. Fallback: .markdown blocks not inside a user message
+  // 2. Fallback: .markdown / .prose blocks not inside a user message
   if (results.length === 0) {
     document.querySelectorAll('.markdown, .prose').forEach((el) => {
       const htmlEl = el as HTMLElement;
@@ -309,10 +309,138 @@ function findAssistantMessages(): HTMLElement[] {
     });
   }
 
+  // 3. Universal fallback: find assistant-only action buttons (Good/Bad response, Read aloud, Copy turn)
+  if (results.length === 0) {
+    const actionBtns = document.querySelectorAll(
+      '[data-testid="good-response-turn-action-button"], [data-testid="copy-turn-action-button"], button[aria-label*="Good response" i], button[aria-label*="Bonne réponse" i], button[aria-label*="Read aloud" i], button[aria-label*="Lire" i]'
+    );
+    actionBtns.forEach((btn) => {
+      const turn =
+        (btn.closest('article') as HTMLElement) ||
+        (btn.closest('[data-testid*="turn"]') as HTMLElement) ||
+        (btn.parentElement?.parentElement?.parentElement as HTMLElement);
+      if (turn && !turn.querySelector('[data-message-author-role="user"]') && !seen.has(turn)) {
+        seen.add(turn);
+        results.push(turn);
+      }
+    });
+  }
+
   return results;
 }
 
+function findToolbarForContainer(scope: Element): Element | null {
+  const actionBtn =
+    scope.querySelector('[data-testid="copy-turn-action-button"]') ||
+    scope.querySelector('[data-testid="good-response-turn-action-button"]') ||
+    scope.querySelector('button[aria-label*="Good response" i], button[aria-label*="Bonne réponse" i], button[aria-label*="Read aloud" i]') ||
+    Array.from(scope.querySelectorAll('button[aria-label*="Copy" i], button[aria-label*="Copier" i]'))
+      .filter((el) => !el.closest('.markdown, pre, code'))
+      .pop() ||
+    null;
+
+  if (!actionBtn) return null;
+
+  // Walk up until we find the row containing multiple action buttons
+  let cur: Element | null = actionBtn.parentElement;
+  for (let i = 0; i < 4 && cur; i++) {
+    if (cur.querySelectorAll('button').length >= 3) {
+      return cur;
+    }
+    cur = cur.parentElement;
+  }
+  return actionBtn.parentElement;
+}
+
+function injectFloatingFallback() {
+  if (document.getElementById('memodock-floating-clipper')) return;
+  const fab = document.createElement('div');
+  fab.id = 'memodock-floating-clipper';
+  fab.style.cssText = [
+    'position:fixed !important',
+    'bottom:22px !important',
+    'right:22px !important',
+    'z-index:2147483647 !important',
+    'display:flex !important',
+    'align-items:center !important',
+  ].join(';');
+
+  const shadow = fab.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = `
+    .md-fab {
+      all: initial;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 9999px;
+      border: 1px solid #2563eb;
+      background: #2563eb;
+      color: #ffffff;
+      cursor: pointer;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      transition: all 0.15s ease;
+    }
+    .md-fab:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .md-fab.saved { background: #16a34a; border-color: #16a34a; }
+    .md-fab.error { background: #dc2626; border-color: #dc2626; }
+    .md-fab svg { display: block; flex-shrink: 0; }
+  `;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'md-fab';
+  btn.title = 'Save latest ChatGPT response to MemoDock';
+  btn.innerHTML = `${MEMODOCK_SVG}<span>Save to MemoDock</span>`;
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const msgs = findAssistantMessages();
+    const target = msgs[msgs.length - 1] || (document.querySelector('main') as HTMLElement) || document.body;
+    const payload = captureResponseHtmlLite(target);
+    chrome.runtime.sendMessage(
+      {
+        action: 'SAVE_CHATGPT_RESPONSE',
+        payload: {
+          ...payload,
+          sourceUrl: window.location.href,
+          sourceTitle: document.title || 'ChatGPT',
+        },
+      },
+      (resp) => {
+        if (chrome.runtime.lastError || !resp?.ok) {
+          btn.className = 'md-fab error';
+          btn.innerHTML = `<span>Error</span>`;
+          setTimeout(() => {
+            btn.className = 'md-fab';
+            btn.innerHTML = `${MEMODOCK_SVG}<span>Save to MemoDock</span>`;
+          }, 2500);
+          return;
+        }
+        btn.className = 'md-fab saved';
+        btn.innerHTML = `${CHECK_SVG}<span>Saved!</span>`;
+        setTimeout(() => {
+          btn.className = 'md-fab';
+          btn.innerHTML = `${MEMODOCK_SVG}<span>Save to MemoDock</span>`;
+        }, 2500);
+      }
+    );
+  });
+
+  shadow.appendChild(style);
+  shadow.appendChild(btn);
+  document.body.appendChild(fab);
+}
+
 function injectButtons() {
+  injectFloatingFallback();
+
   const messages = findAssistantMessages();
   let injected = 0;
 
@@ -327,29 +455,22 @@ function injectButtons() {
       return;
     }
 
-    const bar = document.createElement('div');
-    bar.setAttribute(BUTTON_ATTR, 'true');
-    bar.style.cssText = [
-      'display:flex !important',
-      'justify-content:flex-end !important',
-      'align-items:center !important',
-      'width:100% !important',
-      'margin:8px 0 4px 0 !important',
-      'padding:0 !important',
-      'opacity:1 !important',
-      'visibility:visible !important',
-      'position:relative !important',
-      'z-index:30 !important',
-    ].join(';');
-
+    const toolbar = findToolbarForContainer(scope);
     const btnHost = createMemoDockButton(msgEl);
-    bar.appendChild(btnHost);
 
-    const anchor = (msgEl.querySelector('.markdown') as HTMLElement) || msgEl;
-    if (anchor.parentElement) {
-      anchor.insertAdjacentElement('afterend', bar);
+    if (toolbar) {
+      toolbar.appendChild(btnHost);
     } else {
-      msgEl.appendChild(bar);
+      const bar = document.createElement('div');
+      bar.setAttribute(BUTTON_ATTR, 'true');
+      bar.style.cssText = 'display:flex !important;justify-content:flex-end !important;margin:8px 0 4px 0 !important;opacity:1 !important;visibility:visible !important;z-index:30 !important;';
+      bar.appendChild(btnHost);
+      const anchor = (msgEl.querySelector('.markdown') as HTMLElement) || msgEl;
+      if (anchor.parentElement) {
+        anchor.insertAdjacentElement('afterend', bar);
+      } else {
+        msgEl.appendChild(bar);
+      }
     }
     injected++;
   });
