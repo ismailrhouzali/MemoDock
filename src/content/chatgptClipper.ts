@@ -191,6 +191,99 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
   };
 }
 
+function createMemoDockButton(msgEl: HTMLElement): HTMLElement {
+  const host = document.createElement('span');
+  host.setAttribute(BUTTON_ATTR, 'true');
+  host.style.cssText = 'display:inline-flex !important;align-items:center !important;flex-shrink:0 !important;margin-left:6px !important;vertical-align:middle !important;z-index:20 !important;';
+
+  const shadow = host.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = `
+    .md-btn {
+      all: initial;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 9999px;
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      cursor: pointer;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+      box-sizing: border-box;
+      transition: all 0.15s ease;
+    }
+    .md-btn:hover {
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+    .md-btn.saved {
+      background: #ecfdf5;
+      border-color: #16a34a;
+      color: #15803d;
+    }
+    .md-btn.error {
+      background: #fef2f2;
+      border-color: #dc2626;
+      color: #dc2626;
+    }
+    .md-btn svg {
+      display: block;
+      flex-shrink: 0;
+    }
+  `;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'md-btn';
+  btn.title = 'Save response to MemoDock (HTML Lite)';
+  btn.innerHTML = `${MEMODOCK_SVG}<span>MemoDock</span>`;
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const payload = captureResponseHtmlLite(msgEl);
+    chrome.runtime.sendMessage(
+      {
+        action: 'SAVE_CHATGPT_RESPONSE',
+        payload: {
+          ...payload,
+          sourceUrl: window.location.href,
+          sourceTitle: document.title || 'ChatGPT',
+        },
+      },
+      (resp) => {
+        if (chrome.runtime.lastError || !resp?.ok) {
+          btn.className = 'md-btn error';
+          btn.innerHTML = `<span>Error</span>`;
+          setTimeout(() => {
+            btn.className = 'md-btn';
+            btn.innerHTML = `${MEMODOCK_SVG}<span>MemoDock</span>`;
+          }, 2500);
+          return;
+        }
+        btn.className = 'md-btn saved';
+        btn.innerHTML = `${CHECK_SVG}<span>Saved!</span>`;
+        setTimeout(() => {
+          btn.className = 'md-btn';
+          btn.innerHTML = `${MEMODOCK_SVG}<span>MemoDock</span>`;
+        }, 2500);
+      }
+    );
+  });
+
+  shadow.appendChild(style);
+  shadow.appendChild(btn);
+  return host;
+}
+
 function injectButtons() {
   const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
   assistantMessages.forEach((msg) => {
@@ -203,74 +296,7 @@ function injectButtons() {
       msgEl;
     if (container.querySelector(`[${BUTTON_ATTR}]`)) return;
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.setAttribute(BUTTON_ATTR, 'true');
-    btn.title = 'Save response to MemoDock (HTML Lite)';
-    btn.innerHTML = `${MEMODOCK_SVG}<span style="font-size:11px;font-weight:600;">MemoDock</span>`;
-    btn.style.cssText = [
-      'display:inline-flex',
-      'align-items:center',
-      'flex-shrink:0',
-      'gap:5px',
-      'padding:4px 9px',
-      'border-radius:8px',
-      'border:1px solid rgba(120,113,108,0.28)',
-      'background:rgba(255,255,255,0.92)',
-      'color:#2563eb',
-      'cursor:pointer',
-      'font-family:system-ui,-apple-system,sans-serif',
-      'line-height:1.2',
-      'transition:all 0.15s ease',
-      'margin-left:6px',
-      'z-index:20',
-    ].join(';');
-
-    btn.addEventListener('mouseenter', () => {
-      btn.style.background = '#eff6ff';
-      btn.style.borderColor = '#2563eb';
-    });
-    btn.addEventListener('mouseleave', () => {
-      if (!btn.dataset.saved) {
-        btn.style.background = 'rgba(255,255,255,0.9)';
-        btn.style.borderColor = 'rgba(120,113,108,0.25)';
-      }
-    });
-
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const payload = captureResponseHtmlLite(msgEl);
-      chrome.runtime.sendMessage(
-        {
-          action: 'SAVE_CHATGPT_RESPONSE',
-          payload: {
-            ...payload,
-            sourceUrl: window.location.href,
-            sourceTitle: document.title || 'ChatGPT',
-          },
-        },
-        (resp) => {
-          if (chrome.runtime.lastError || !resp?.ok) {
-            btn.innerHTML = `<span style="font-size:11px;color:#dc2626;">Error</span>`;
-            return;
-          }
-          btn.dataset.saved = 'true';
-          btn.style.background = '#ecfdf5';
-          btn.style.borderColor = '#16a34a';
-          btn.style.color = '#16a34a';
-          btn.innerHTML = `${CHECK_SVG}<span style="font-size:11px;font-weight:600;">Saved!</span>`;
-          setTimeout(() => {
-            delete btn.dataset.saved;
-            btn.style.background = 'rgba(255,255,255,0.9)';
-            btn.style.borderColor = 'rgba(120,113,108,0.25)';
-            btn.style.color = '#2563eb';
-            btn.innerHTML = `${MEMODOCK_SVG}<span style="font-size:11px;font-weight:600;">MemoDock</span>`;
-          }, 2500);
-        }
-      );
-    });
+    const btnHost = createMemoDockButton(msgEl);
 
     // Try attaching inside ChatGPT's native action bar next to Copy button; fallback to top-right of message
     const copyBtn =
@@ -280,13 +306,13 @@ function injectButtons() {
       copyBtn?.closest('div.flex, div[class*="items-center"]') || copyBtn?.parentElement;
 
     if (actionBar) {
-      actionBar.appendChild(btn);
+      actionBar.appendChild(btnHost);
     } else {
       msgEl.style.position = 'relative';
-      btn.style.position = 'absolute';
-      btn.style.top = '4px';
-      btn.style.right = '4px';
-      msgEl.appendChild(btn);
+      btnHost.style.position = 'absolute';
+      btnHost.style.top = '4px';
+      btnHost.style.right = '4px';
+      msgEl.appendChild(btnHost);
     }
   });
 }
