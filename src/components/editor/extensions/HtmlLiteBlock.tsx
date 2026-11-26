@@ -146,10 +146,16 @@ function buildStandaloneInteractiveHtml(rawHtml: string, title: string, sourceUr
       box-shadow: 0 1px 3px rgba(0,0,0,.04);
       overflow-x: auto;
     }
-    .card-main h1, .card-main h2, .card-main h3, .card-main h4 { scroll-margin-top: 84px; margin-top: 1.4em; margin-bottom: .5em; }
-    .card-main p { margin: .6em 0; }
-    .card-main ul, .card-main ol { padding-left: 1.4em; margin: .6em 0; }
-    .card-main li { margin: .3em 0; }
+    .card-main * { box-sizing: border-box; max-width: 100%; }
+    .card-main h1, .card-main h2, .card-main h3, .card-main h4 { scroll-margin-top: 84px; margin-top: 1.4em; margin-bottom: .5em; line-height: 1.3; }
+    .card-main p { margin: .55em 0; }
+    .card-main ul { list-style-type: disc; padding-left: 1.5em; margin: .6em 0; }
+    .card-main ol { list-style-type: decimal; padding-left: 1.5em; margin: .6em 0; }
+    .card-main li { margin: .35em 0; display: list-item; }
+    .card-main li p { margin: 0; }
+    .card-main hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    .card-main blockquote { border-left: 3px solid var(--accent); padding: 6px 14px; margin: 12px 0; background: rgba(37,99,235,.04); border-radius: 0 8px 8px 0; }
+    .card-main input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; vertical-align: middle; margin-right: 8px; }
     .card-main table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
     .card-main th, .card-main td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
     .card-main th { background: rgba(100,116,139,.08); font-weight: 600; }
@@ -402,7 +408,7 @@ const HtmlLiteComponent: React.FC<NodeViewProps> = ({ node, updateAttributes, de
         ) : (
           <div
             ref={bodyRef}
-            className="p-4 md:p-5 memodock-html-lite text-sm leading-relaxed text-stone-800 dark:text-stone-200 overflow-x-auto [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_li]:my-1 [&_pre]:bg-zinc-900 [&_pre]:text-zinc-100 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3 [&_img]:cursor-zoom-in"
+            className="p-4 md:p-5 memodock-html-lite text-sm leading-relaxed text-stone-800 dark:text-stone-200 overflow-x-auto [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_li]:my-1 [&_li_p]:m-0 [&_hr]:my-4 [&_hr]:border-stone-200 [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-3 [&_blockquote]:my-3 [&_pre]:bg-zinc-900 [&_pre]:text-zinc-100 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3 [&_img]:cursor-zoom-in"
             onClick={(e) => {
               const target = e.target as HTMLElement;
               const link = target?.closest('a');

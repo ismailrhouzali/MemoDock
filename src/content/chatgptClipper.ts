@@ -132,14 +132,35 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
 
     const cEl = cNode as HTMLElement;
     const cs = window.getComputedStyle(liveNode);
+    const liveInlineWidth = (liveNode as HTMLElement).style?.width || '';
 
-    // Preserve card/badge/code backgrounds, borders & shadows (resolved RGB values from getComputedStyle)
+    // Clear raw ChatGPT inline styles (which contain broken var(--...) / aspect-ratio / height:100%)
+    // and rebuild only clean, resolved styles from getComputedStyle
+    cEl.removeAttribute('style');
+
+    if (cEl.tagName === 'HR') {
+      cEl.style.border = 'none';
+      cEl.style.borderTop = '1px solid #e5e7eb';
+      cEl.style.margin = '16px 0';
+      return;
+    }
+
+    // Preserve card/badge/code backgrounds, borders & shadows (resolved RGB values)
     const bg = cs.backgroundColor;
     if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
       cEl.style.backgroundColor = bg;
     }
-    if (cs.borderWidth && parseFloat(cs.borderWidth) > 0 && cs.borderStyle !== 'none') {
-      cEl.style.border = `${cs.borderWidth} ${cs.borderStyle} ${cs.borderColor}`;
+    if (cs.borderTopWidth && parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none') {
+      cEl.style.borderTop = `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`;
+    }
+    if (cs.borderBottomWidth && parseFloat(cs.borderBottomWidth) > 0 && cs.borderBottomStyle !== 'none') {
+      cEl.style.borderBottom = `${cs.borderBottomWidth} ${cs.borderBottomStyle} ${cs.borderBottomColor}`;
+    }
+    if (cs.borderLeftWidth && parseFloat(cs.borderLeftWidth) > 0 && cs.borderLeftStyle !== 'none') {
+      cEl.style.borderLeft = `${cs.borderLeftWidth} ${cs.borderLeftStyle} ${cs.borderLeftColor}`;
+    }
+    if (cs.borderRightWidth && parseFloat(cs.borderRightWidth) > 0 && cs.borderRightStyle !== 'none') {
+      cEl.style.borderRight = `${cs.borderRightWidth} ${cs.borderRightStyle} ${cs.borderRightColor}`;
     }
     if (cs.borderRadius && parseFloat(cs.borderRadius) > 0 && !SKIP_FLEX_TAGS.has(cEl.tagName)) {
       cEl.style.borderRadius = cs.borderRadius;
@@ -156,6 +177,10 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     if (cs.fontWeight && Number(cs.fontWeight) >= 600) {
       cEl.style.fontWeight = cs.fontWeight;
     }
+    if (cs.fontSize && (cEl.tagName === 'SPAN' || cEl.tagName === 'DIV') && parseFloat(cs.fontSize) <= 13) {
+      cEl.style.fontSize = cs.fontSize;
+    }
+
     // Preserve flex/grid ONLY on layout containers (never on table rows, cells, paragraphs or headings)
     if (!SKIP_FLEX_TAGS.has(cEl.tagName)) {
       if (cs.display === 'flex' || cs.display === 'inline-flex' || cs.display === 'grid') {
@@ -170,9 +195,14 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
         if (cs.gridTemplateColumns && cs.gridTemplateColumns !== 'none') {
           cEl.style.gridTemplateColumns = cs.gridTemplateColumns;
         }
+        // Keep pill badges compact instead of stretching 100%
+        if (cs.borderRadius && parseFloat(cs.borderRadius) >= 999 && cs.display === 'flex') {
+          cEl.style.display = 'inline-flex';
+          cEl.style.width = 'fit-content';
+        }
       }
-      if ((liveNode as HTMLElement).style?.width) {
-        cEl.style.width = (liveNode as HTMLElement).style.width;
+      if (liveInlineWidth && liveInlineWidth.includes('%')) {
+        cEl.style.width = liveInlineWidth;
       }
       if (cs.height && parseFloat(cs.height) <= 12 && parseFloat(cs.height) >= 4 && bg && bg !== 'rgba(0, 0, 0, 0)') {
         cEl.style.height = cs.height;
@@ -180,6 +210,12 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     }
 
     if (cEl.tagName === 'INPUT' && (liveNode as HTMLInputElement).type === 'checkbox') {
+      cEl.style.width = '15px';
+      cEl.style.height = '15px';
+      cEl.style.accentColor = '#2563eb';
+      cEl.style.cursor = 'pointer';
+      cEl.style.flexShrink = '0';
+      cEl.style.marginRight = '8px';
       if ((liveNode as HTMLInputElement).checked) {
         cEl.setAttribute('checked', 'checked');
       } else {
