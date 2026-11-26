@@ -211,12 +211,21 @@ export function useNotes(
   };
 
   const updateFolder = async (id: string, name: string, color?: string, icon?: string | null) => {
-    await db.folders.update(id, {
-      name: name.trim(),
-      ...(color ? { color } : {}),
-      ...(icon !== undefined ? { icon: icon || undefined } : {}),
-      updatedAt: Date.now(),
-    });
+    if (icon === null) {
+      await db.folders.where('id').equals(id).modify((folder) => {
+        folder.name = name.trim();
+        if (color) folder.color = color;
+        delete folder.icon;
+        folder.updatedAt = Date.now();
+      });
+    } else {
+      await db.folders.update(id, {
+        name: name.trim(),
+        ...(color ? { color } : {}),
+        ...(icon !== undefined ? { icon } : {}),
+        updatedAt: Date.now(),
+      });
+    }
   };
 
   const deleteFolder = async (id: string) => {

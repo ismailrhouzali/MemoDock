@@ -71,6 +71,7 @@ export type WorkspaceView = 'notes' | 'dashboard' | 'databases' | 'documents';
 export type DatabaseColumnType =
   | 'text'
   | 'number'
+  | 'formula'
   | 'select'
   | 'multi-select'
   | 'status'

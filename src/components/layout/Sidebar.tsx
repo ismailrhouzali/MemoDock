@@ -171,7 +171,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteTitle, setEditingNoteTitle] = useState('');
   const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
-  const [iconPickerTarget, setIconPickerTarget] = useState<{ type: 'folder' | 'note'; id: string } | null>(null);
+  const [iconPickerTarget, setIconPickerTarget] = useState<{
+    type: 'folder' | 'note';
+    id: string;
+    rect: { top: number; left: number; bottom: number };
+  } | null>(null);
   // Folders are closed (collapsed) by default
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
 
@@ -489,10 +493,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
                 setIconPickerTarget(
                   iconPickerTarget?.type === 'note' && iconPickerTarget.id === note.id
                     ? null
-                    : { type: 'note', id: note.id }
+                    : { type: 'note', id: note.id, rect: { top: r.top, left: r.left, bottom: r.bottom } }
                 );
               }}
               className="p-0.5 rounded hover:bg-stone-200/70 dark:hover:bg-zinc-700/70 flex-shrink-0 transition"
@@ -507,6 +512,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {iconPickerTarget?.type === 'note' && iconPickerTarget.id === note.id && onUpdateNote && (
               <IconPicker
                 currentIcon={note.icon}
+                anchorRect={iconPickerTarget.rect}
                 onSelect={(icon) => onUpdateNote(note.id, { icon })}
                 onClose={() => setIconPickerTarget(null)}
               />
@@ -888,10 +894,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              const r = e.currentTarget.getBoundingClientRect();
                               setIconPickerTarget(
                                 iconPickerTarget?.type === 'folder' && iconPickerTarget.id === folder.id
                                   ? null
-                                  : { type: 'folder', id: folder.id }
+                                  : { type: 'folder', id: folder.id, rect: { top: r.top, left: r.left, bottom: r.bottom } }
                               );
                             }}
                             className="p-0.5 rounded hover:bg-stone-200/70 dark:hover:bg-zinc-700/70 flex-shrink-0 transition"
@@ -909,6 +916,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {iconPickerTarget?.type === 'folder' && iconPickerTarget.id === folder.id && onUpdateFolder && (
                             <IconPicker
                               currentIcon={folder.icon}
+                              anchorRect={iconPickerTarget.rect}
                               onSelect={(icon) => onUpdateFolder(folder.id, folder.name, folder.color, icon ?? null)}
                               onClose={() => setIconPickerTarget(null)}
                             />
