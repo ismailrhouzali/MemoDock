@@ -160,6 +160,9 @@ function captureResponseHtmlLite(messageEl: HTMLElement): {
     if (!SKIP_FLEX_TAGS.has(cEl.tagName)) {
       if (cs.display === 'flex' || cs.display === 'inline-flex' || cs.display === 'grid') {
         cEl.style.display = cs.display;
+        if (cs.display !== 'grid' && cs.flexDirection && cs.flexDirection !== 'row') {
+          cEl.style.flexDirection = cs.flexDirection;
+        }
         if (cs.gap && cs.gap !== 'normal') cEl.style.gap = cs.gap;
         if (cs.flexWrap === 'wrap') cEl.style.flexWrap = 'wrap';
         if (cs.alignItems && cs.alignItems !== 'normal') cEl.style.alignItems = cs.alignItems;
