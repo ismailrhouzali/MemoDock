@@ -112,7 +112,15 @@ export const IconPicker: React.FC<IconPickerProps> = ({
   onClose,
 }) => {
   const [search, setSearch] = useState('');
+  const [customEmoji, setCustomEmoji] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  const handleApplyCustom = () => {
+    const val = customEmoji.trim();
+    if (!val) return;
+    onSelect(val);
+    onClose();
+  };
 
   const filteredEmojis = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -186,6 +194,31 @@ export const IconPicker: React.FC<IconPickerProps> = ({
             autoFocus
             className="w-full pl-6 pr-2 py-1 bg-stone-50 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-md text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+        </div>
+
+        {/* Custom / Any Emoji Input (paste or Win + .) */}
+        <div className="flex items-center gap-1 mb-2">
+          <input
+            type="text"
+            value={customEmoji}
+            onChange={(e) => setCustomEmoji(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleApplyCustom();
+              }
+            }}
+            placeholder="Any emoji (paste or Win + .)"
+            className="flex-1 px-2 py-1 bg-stone-50 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 rounded-md text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={handleApplyCustom}
+            disabled={!customEmoji.trim()}
+            className="px-2 py-1 rounded-md bg-blue-600 text-white text-[10px] font-semibold disabled:opacity-40 hover:bg-blue-700 transition"
+          >
+            Add
+          </button>
         </div>
 
         {/* Category Tabs */}

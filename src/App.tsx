@@ -169,6 +169,29 @@ export const App: React.FC = () => {
         e.preventDefault();
         setFocusMode((prev) => !prev);
       }
+      // Delete key -> Move active note to trash (only when not typing in an input or editor)
+      if (e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        const isEditingText =
+          target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable ||
+            !!target.closest('.ProseMirror, [contenteditable="true"]'));
+        const anyModalOpen =
+          isSearchOpen ||
+          isSettingsOpen ||
+          isAIOpen ||
+          isExportOpen ||
+          isShortcutsOpen ||
+          isTemplatesOpen ||
+          isHistoryOpen;
+        if (!isEditingText && !anyModalOpen && activeNoteId) {
+          e.preventDefault();
+          deleteNote(activeNoteId);
+        }
+      }
       // Escape -> close focus mode or modals
       if (e.key === 'Escape') {
         if (isSearchOpen) setIsSearchOpen(false);
@@ -184,6 +207,8 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    activeNoteId,
+    deleteNote,
     isSearchOpen,
     isSettingsOpen,
     isAIOpen,

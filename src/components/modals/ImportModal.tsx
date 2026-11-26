@@ -32,6 +32,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pdfMode, setPdfMode] = useState<'text' | 'attachment'>('text');
+  const [enablePptxOcr, setEnablePptxOcr] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,6 +51,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         const file = files[i];
         const res = await processUniversalFile(file, noteId, {
           extractPdfTextMode: pdfMode === 'text',
+          enablePptxOcr,
+          onProgress: (msg) => setStatusMessage(msg),
         });
 
         if (res.action === 'insert_html' && res.html) {
@@ -171,19 +174,33 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               Drag & drop files here, or <span className="text-amber-600 hover:underline">browse</span>
             </div>
             <div className="text-[11px] text-stone-400 dark:text-zinc-500">
-              Supports Markdown (.md), Word (.docx), PDF (.pdf), HTML (.html), and Text (.txt)
+              Supports Markdown (.md), Word (.docx), PowerPoint (.pptx), PDF (.pdf), HTML (.html), and Text (.txt)
             </div>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".md,.markdown,.txt,.html,.htm,.docx,.pdf"
+              accept=".md,.markdown,.txt,.html,.htm,.docx,.pdf,.pptx"
               onChange={(e) => {
                 if (e.target.files) handleFiles(e.target.files);
               }}
               className="hidden"
             />
           </div>
+
+          {/* PPTX OCR Option */}
+          <label className="flex items-center justify-between p-2.5 rounded-lg bg-stone-50 dark:bg-zinc-950/60 border border-stone-200 dark:border-zinc-800 cursor-pointer">
+            <div>
+              <div className="font-medium text-stone-800 dark:text-zinc-200">PowerPoint (.pptx) OCR &amp; Markdown</div>
+              <div className="text-[10px] text-stone-400">Extract slide text, tables, notes, images &amp; run OCR on images</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={enablePptxOcr}
+              onChange={(e) => setEnablePptxOcr(e.target.checked)}
+              className="w-4 h-4 accent-amber-600"
+            />
+          </label>
 
           {/* Supported Format Pills */}
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] text-stone-500 dark:text-zinc-400">
@@ -192,6 +209,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             </span>
             <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
               Word (.docx)
+            </span>
+            <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
+              PowerPoint (.pptx + OCR)
             </span>
             <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700">
               PDF Documents

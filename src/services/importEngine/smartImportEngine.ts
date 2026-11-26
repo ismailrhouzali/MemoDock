@@ -10,6 +10,7 @@ import { normalizeMarkdownTables, isTsvTable, convertTsvToHtmlTable } from './ta
 import { protectCodeBlocks, restoreCodeBlocks } from './codeDetector';
 import { cleanRichHtml, isHtmlJustCodeWrapper } from './htmlCleaner';
 import { readTextFile, parseDocxFile, extractPdfText, createPdfAttachment } from './fileParsers';
+import { parsePptxFile } from './pptxParser';
 import { Attachment } from '../../db/types';
 
 // Configure marked
@@ -251,14 +252,29 @@ export function processUniversalClipboard(event: ClipboardEvent): IngestionResul
 export async function processUniversalFile(
   file: File,
   noteId: string,
-  options?: { extractPdfTextMode?: boolean }
+  options?: { extractPdfTextMode?: boolean; enablePptxOcr?: boolean; onProgress?: (msg: string) => void }
 ): Promise<{
   action: 'insert_html' | 'create_attachment';
   html?: string;
+  markdown?: string;
   attachment?: Attachment;
   source: string;
 }> {
   const ext = file.name.split('.').pop()?.toLowerCase();
+
+  // 0. PowerPoint (.pptx) Import -> Markdown + OCR
+  if (ext === 'pptx') {
+    const pptx = await parsePptxFile(file, {
+      enableOcr: options?.enablePptxOcr !== false,
+      onProgress: options?.onProgress,
+    });
+    return {
+      action: 'insert_html',
+      html: pptx.html,
+      markdown: pptx.markdown,
+      source: `PowerPoint (.pptx): ${file.name} (${pptx.slideCount} slides, ${pptx.imageCount} images, ${pptx.ocrCount} OCR)`,
+    };
+  }
 
   // 1. DOCX Import
   if (ext === 'docx') {

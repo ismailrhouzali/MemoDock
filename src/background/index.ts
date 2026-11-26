@@ -132,62 +132,6 @@ chrome.commands.onCommand.addListener((command) => {
   }
 });
 
-// Handle ChatGPT Response Clipper messages
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.action === 'SAVE_CHATGPT_RESPONSE' && message.payload) {
-    const { title, html, plainText, sourceUrl, sourceTitle } = message.payload;
-    const now = Date.now();
-    const noteId = `chatgpt-${now}-${Math.random().toString(36).substring(2, 7)}`;
-
-    const safeHtmlAttr = escapeHtml(html || '');
-    const noteContent = `<div data-type="html-lite-block" data-html="${safeHtmlAttr}" data-source-url="${escapeHtml(
-      sourceUrl || ''
-    )}" data-source-title="${escapeHtml(sourceTitle || 'ChatGPT Response')}"></div>`;
-
-    const newNote = {
-      id: noteId,
-      title: title || 'ChatGPT Response',
-      icon: '🤖',
-      content: noteContent,
-      plainText: plainText || '',
-      createdAt: now,
-      updatedAt: now,
-      folderId: null,
-      tags: ['ChatGPT'],
-      isPinned: false,
-      isFavorite: false,
-      isArchived: false,
-      isTrash: false,
-      sourceUrl: sourceUrl || '',
-      sourceTitle: sourceTitle || 'ChatGPT',
-    };
-
-    chrome.storage.local
-      .get('pending_clips')
-      .then((res) => {
-        const clips = res.pending_clips || [];
-        clips.push(newNote);
-        return chrome.storage.local.set({ pending_clips: clips });
-      })
-      .then(() => {
-        if (chrome.action && chrome.action.setBadgeText) {
-          chrome.action.setBadgeText({ text: '✓' });
-          chrome.action.setBadgeBackgroundColor({ color: '#16a34a' });
-          setTimeout(() => {
-            chrome.action.setBadgeText({ text: '' });
-          }, 2500);
-        }
-        sendResponse({ ok: true, noteId });
-      })
-      .catch((err) => {
-        console.error('Failed to save ChatGPT response:', err);
-        sendResponse({ ok: false, error: String(err) });
-      });
-
-    return true; // keep message channel open for async sendResponse
-  }
-});
-
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')

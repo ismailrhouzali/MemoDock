@@ -35,10 +35,12 @@ import {
   MoreHorizontal,
   Smile,
   LayoutDashboard,
+  Presentation,
 } from 'lucide-react';
 import { IconPicker } from '../common/IconPicker';
 import { pdfStorageService } from '../../services/pdfStorageService';
 import { spreadsheetService } from '../../services/spreadsheet/spreadsheetService';
+import { parsePptxFile } from '../../services/importEngine/pptxParser';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -68,6 +70,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const sheetInputRef = useRef<HTMLInputElement>(null);
+  const pptxInputRef = useRef<HTMLInputElement>(null);
+  const [isImportingPptx, setIsImportingPptx] = useState(false);
 
   const [isHeadingsOpen, setIsHeadingsOpen] = useState(false);
   const [isTableMenuOpen, setIsTableMenuOpen] = useState(false);
@@ -179,6 +183,22 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     if (sheetInputRef.current) sheetInputRef.current.value = '';
   };
 
+  const handlePptxFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsImportingPptx(true);
+      try {
+        const res = await parsePptxFile(file, { enableOcr: true });
+        editor.chain().focus().insertContent(res.html).run();
+      } catch (err) {
+        console.error('Failed to import PPTX:', err);
+      } finally {
+        setIsImportingPptx(false);
+      }
+    }
+    if (pptxInputRef.current) pptxInputRef.current.value = '';
+  };
+
   const btnClass = (active: boolean) =>
     `p-1.5 rounded-md transition ${
       active
@@ -200,6 +220,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
       <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={handlePdfFile} />
       <input ref={sheetInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleSpreadsheetFile} />
+      <input ref={pptxInputRef} type="file" accept=".pptx" className="hidden" onChange={handlePptxFile} />
 
       {/* Main Tools Container: Single Row, Logical Groups */}
       <div className="flex items-center gap-0.5 flex-wrap">
@@ -622,6 +643,15 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           title="Attach / Embed CSV or XLSX Spreadsheet"
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+        </button>
+        <button
+          type="button"
+          onClick={() => pptxInputRef.current?.click()}
+          disabled={isImportingPptx}
+          className={btnClass(isImportingPptx)}
+          title={isImportingPptx ? 'Extracting PPTX & OCR...' : 'Import PowerPoint (.pptx) to Markdown + OCR'}
+        >
+          <Presentation className={`w-3.5 h-3.5 text-orange-500 ${isImportingPptx ? 'animate-pulse' : ''}`} />
         </button>
       </div>
 

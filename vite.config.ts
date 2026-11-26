@@ -14,13 +14,10 @@ export default defineConfig({
         sidepanel: resolve(__dirname, 'sidepanel.html'),
         landing: resolve(__dirname, 'landing.html'),
         background: resolve(__dirname, 'src/background/index.ts'),
-        chatgptClipper: resolve(__dirname, 'src/content/chatgptClipper.ts'),
       },
       output: {
         entryFileNames: (chunkInfo) => {
-          return chunkInfo.name === 'background' || chunkInfo.name === 'chatgptClipper'
-            ? '[name].js'
-            : 'assets/[name]-[hash].js';
+          return chunkInfo.name === 'background' ? '[name].js' : 'assets/[name]-[hash].js';
         },
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
