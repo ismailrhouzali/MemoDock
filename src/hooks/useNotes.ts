@@ -11,12 +11,12 @@ export function useNotes(
   const notes = useLiveQuery(async () => {
     let collection = db.notes.toCollection();
 
-    // Base query depending on view
-    let allNotes = await collection.toArray();
+    // Base query depending on view, guarding against null/corrupted IndexedDB rows
+    let allNotes = (await collection.toArray()).filter((n): n is Note => Boolean(n && typeof n === 'object'));
 
     // Filter by view
     if (currentFilter.type === 'trash') {
-      allNotes = allNotes.filter((n) => n.isTrash);
+      allNotes = allNotes.filter((n) => Boolean(n.isTrash));
     } else {
       // In all other views, exclude trashed notes
       allNotes = allNotes.filter((n) => !n.isTrash);
@@ -79,22 +79,25 @@ export function useNotes(
   }, [currentFilter, searchQuery, sortField, sortOrder]);
 
   const folders = useLiveQuery(async () => {
-    const list = await db.folders.toArray();
+    const list = (await db.folders.toArray()).filter((f): f is Folder => Boolean(f && typeof f === 'object'));
     return list.sort((a, b) => {
       const orderA = a.order !== undefined ? a.order : a.createdAt;
       const orderB = b.order !== undefined ? b.order : b.createdAt;
       return orderA - orderB;
     });
   }, []);
-  const tags = useLiveQuery(() => db.tags.toArray(), []);
+  const tags = useLiveQuery(
+    async () => (await db.tags.toArray()).filter((t): t is Tag => Boolean(t && typeof t === 'object')),
+    []
+  );
 
   // Counts for sidebar badges
   const counts = useLiveQuery(async () => {
-    const all = await db.notes.toArray();
+    const all = (await db.notes.toArray()).filter((n): n is Note => Boolean(n && typeof n === 'object'));
     const active = all.filter((n) => !n.isTrash && !n.isArchived);
     const favorites = all.filter((n) => !n.isTrash && n.isFavorite && !n.isArchived);
     const archived = all.filter((n) => !n.isTrash && n.isArchived);
-    const trash = all.filter((n) => n.isTrash);
+    const trash = all.filter((n) => Boolean(n.isTrash));
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const recents = all.filter((n) => !n.isTrash && !n.isArchived && n.updatedAt >= sevenDaysAgo);
 
@@ -174,8 +177,8 @@ export function useNotes(
   };
 
   const emptyTrash = async () => {
-    const all = await db.notes.toArray();
-    const trashed = all.filter((n) => n.isTrash);
+    const all = (await db.notes.toArray()).filter((n): n is Note => Boolean(n && typeof n === 'object'));
+    const trashed = all.filter((n) => Boolean(n.isTrash));
     if (trashed.length > 0) {
       await db.notes.bulkDelete(trashed.map((n) => n.id));
     }

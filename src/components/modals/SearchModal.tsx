@@ -45,7 +45,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const trimmed = query.trim();
   const lower = trimmed.toLowerCase();
 
-  const filteredNotes = notes.filter((n) => {
+  const filteredNotes = (notes || []).filter((n) => {
+    if (!n) return false;
     if (lower.startsWith('/pinned')) {
       const rest = lower.replace('/pinned', '').trim();
       return n.isPinned && (!rest || n.title.toLowerCase().includes(rest) || n.plainText.toLowerCase().includes(rest));

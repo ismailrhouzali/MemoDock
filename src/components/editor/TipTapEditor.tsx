@@ -890,7 +890,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               const totalTasks = (htmlStr.match(/data-type="taskItem"/g) || []).length;
               const doneTasks = (htmlStr.match(/data-checked="true"/g) || []).length;
               const tablesCount = (htmlStr.match(/data-type="database-block"|<table/g) || []).length;
-              const subPagesList = allNotes.filter((n) => n.parentNoteId === note.id && !n.isTrash);
+              const subPagesList = (allNotes || []).filter((n) => n && n.parentNoteId === note.id && !n.isTrash);
               const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
               return (
@@ -1027,10 +1027,10 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     </button>
                   )}
                 </div>
-                {allNotes.filter((n) => n.parentNoteId === note.id && !n.isTrash).length > 0 && (
+                {(allNotes || []).filter((n) => n && n.parentNoteId === note.id && !n.isTrash).length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {allNotes
-                      .filter((n) => n.parentNoteId === note.id && !n.isTrash)
+                    {(allNotes || [])
+                      .filter((n) => n && n.parentNoteId === note.id && !n.isTrash)
                       .map((sp) => (
                         <button
                           key={sp.id}

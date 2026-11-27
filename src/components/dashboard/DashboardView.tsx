@@ -31,7 +31,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateView,
   onDisableDashboard,
 }) => {
-  const activeNotes = notes.filter((n) => !n.isTrash && !n.isArchived);
+  const activeNotes = (notes || []).filter((n) => n && !n.isTrash && !n.isArchived);
   const pinnedNotes = activeNotes.filter((n) => n.isPinned).slice(0, 4);
   const recentNotes = [...activeNotes]
     .sort((a, b) => b.updatedAt - a.updatedAt)
