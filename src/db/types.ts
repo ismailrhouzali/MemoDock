@@ -86,14 +86,32 @@ export type DatabaseColumnType =
   | 'person'
   | 'image'
   | 'checkbox'
-  | 'url';
-export type DatabaseViewType = 'table' | 'board' | 'gallery';
+  | 'url'
+  | 'email'
+  | 'phone'
+  | 'createdTime'
+  | 'lastEditedTime'
+  | 'relation'
+  | 'rollup';
+export type DatabaseViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar';
+
+export interface DatabaseViewConfig {
+  id: string;
+  name: string;
+  type: DatabaseViewType;
+  filterColId?: string;
+  filterValue?: string;
+  sortColId?: string;
+  sortAsc?: boolean;
+  groupByColId?: string;
+}
 
 export interface DatabaseColumn {
   id: string;
   name: string;
   type: DatabaseColumnType;
   options?: string[]; // For 'select', 'multi-select', 'status' columns
+  relationDbId?: string; // For 'relation' columns
 }
 
 export interface DatabaseRow {
@@ -112,6 +130,8 @@ export interface NoteDatabase {
   columns: DatabaseColumn[];
   rows: DatabaseRow[];
   defaultView: DatabaseViewType;
+  views?: DatabaseViewConfig[];
+  defaultRowTemplate?: Record<string, string | number | boolean | string[]>;
   noteId?: string | null;
   createdAt: number;
   updatedAt: number;

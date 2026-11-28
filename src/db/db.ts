@@ -531,6 +531,16 @@ export const BUILTIN_TEMPLATES: NoteTemplate[] = [
 export async function seedInitialDataIfNeeded(): Promise<void> {
   const now = Date.now();
 
+  // Purge any null/corrupted IndexedDB rows in notes/folders/databases so liveQuery never crashes
+  try {
+    await db.notes
+      .toCollection()
+      .filter((n) => !n || typeof n !== 'object' || !n.id)
+      .delete();
+  } catch {
+    // Ignore cleanup errors on fresh DB
+  }
+
   // Seed default collections if needed
   const colCount = await db.collections.count();
   if (colCount === 0) {

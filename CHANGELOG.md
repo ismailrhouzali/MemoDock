@@ -2,6 +2,13 @@
 
 All notable changes to MemoDock are documented in this file.
 
+## [2.3.0-parity-m3] - 2026-11-28
+### Added
+- **Database Views (`DatabaseBlock.tsx`)**: Table, Board (Kanban with drag-and-drop), List, Gallery, and Calendar views with live filter bar, Row-as-Page properties drawer, Full-Page expand mode, and Linked Database switcher.
+- **Additional Property Types (`types.ts`, `DatabaseBlock.tsx`)**: Added `email`, `phone`, `createdTime`, `lastEditedTime`, `relation`, and `rollup` column types.
+### Fixed
+- **Null-Row Crash Guard (`db.ts`, `linkService.ts`)**: Purge any null/corrupted IndexedDB rows on startup and guard `extractInternalLinks` / `syncBacklinks` against null notes.
+
 ## [2.2.0-parity-m2] - 2026-11-28
 ### Added
 - **Block Drag Handle & Action Menu (`BlockHandleMenu.tsx`)**: Hover `⋮⋮` grip on top-level blocks with Move Up, Move Down, Duplicate, Delete, and Turn Into actions.

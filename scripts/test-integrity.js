@@ -8,6 +8,7 @@ import { convertTextToTipTapHtml } from '../src/services/importEngine/smartImpor
 import { parseCsv, exportToCsv } from '../src/services/spreadsheet/csvEngine.ts';
 import { DEFAULT_PROFILES, DEFAULT_KEYBOARD_SHORTCUTS } from '../src/db/db.ts';
 import { resolveTemplateVariables } from '../src/utils/templateVariables.ts';
+import { extractInternalLinks as extractServiceInternalLinks } from '../src/services/linkService.ts';
 
 console.log('=== Running NoteBook System & Extension Verification Tests ===\n');
 
@@ -317,6 +318,13 @@ assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/BlockHandle
 assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/ToggleHeading.tsx')), 'ToggleHeading.tsx exists');
 assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/SubPageBlock.tsx')), 'SubPageBlock.tsx exists');
 assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/ColumnLayout.tsx')), 'ColumnLayout.tsx exists');
+
+// 19. Test Null-Row Safety in linkService & Database Views presence
+const safeLinks = extractServiceInternalLinks('<p>[[Valid Note]]</p>', [null, { id: 'n-1', title: 'Valid Note' }]);
+assert(safeLinks.includes('n-1'), 'extractInternalLinks handles null rows safely');
+const dbBlockSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/editor/extensions/DatabaseBlock.tsx'), 'utf-8');
+assert(dbBlockSrc.includes("activeView === 'board'"), 'DatabaseBlock supports Board view');
+assert(dbBlockSrc.includes("activeView === 'calendar'"), 'DatabaseBlock supports Calendar view');
 
 console.log(`\n========================================`);
 console.log(`TOTAL TESTS: ${passedTests + failedTests} | PASSED: ${passedTests} | FAILED: ${failedTests}`);

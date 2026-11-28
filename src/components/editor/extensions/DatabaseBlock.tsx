@@ -37,6 +37,17 @@ import {
   Download,
   Copy,
   ExternalLink,
+  Kanban,
+  List as ListIcon,
+  LayoutGrid,
+  CalendarDays,
+  Filter,
+  Maximize2,
+  Minimize2,
+  Mail,
+  Phone,
+  Clock,
+  GitBranch,
 } from 'lucide-react';
 
 const PROPERTY_TYPES: {
@@ -55,6 +66,12 @@ const PROPERTY_TYPES: {
   { type: 'image', label: 'Image', Icon: ImageIcon },
   { type: 'checkbox', label: 'Checkbox', Icon: CheckSquare },
   { type: 'url', label: 'URL', Icon: Link2 },
+  { type: 'email', label: 'Email', Icon: Mail },
+  { type: 'phone', label: 'Phone', Icon: Phone },
+  { type: 'createdTime', label: 'Created Time', Icon: Clock },
+  { type: 'lastEditedTime', label: 'Last Edited', Icon: Clock },
+  { type: 'relation', label: 'Relation', Icon: GitBranch },
+  { type: 'rollup', label: 'Rollup', Icon: Calculator },
 ];
 
 const STATUS_OPTIONS = ['Not started', 'In progress', 'Done'];
@@ -75,7 +92,29 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
   const [sortAsc, setSortAsc] = useState(true);
   const [focusedFormulaCell, setFocusedFormulaCell] = useState<string | null>(null);
   const [colAggregations, setColAggregations] = useState<Record<string, AggregationType>>({});
+  const [activeView, setActiveView] = useState<NoteDatabase['defaultView']>('table');
+  const [filterText, setFilterText] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isFullPage, setIsFullPage] = useState(false);
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [allDatabases, setAllDatabases] = useState<NoteDatabase[]>([]);
+  const [isLinkDbOpen, setIsLinkDbOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    db.databases.toArray().then(setAllDatabases).catch(() => {});
+  }, [databaseId]);
+
+  useEffect(() => {
+    if (database?.defaultView) {
+      setActiveView(database.defaultView);
+    }
+  }, [database?.id]);
 
   // Load existing database or auto-initialize a self-contained Smart Table inside the note
   useEffect(() => {
@@ -173,6 +212,12 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
       image: 'Image',
       checkbox: 'Done',
       url: 'URL',
+      email: 'Email',
+      phone: 'Phone',
+      createdTime: 'Created',
+      lastEditedTime: 'Updated',
+      relation: 'Relation',
+      rollup: 'Rollup',
     };
     const col: DatabaseColumn = {
       id: `col-${Date.now()}`,
@@ -310,16 +355,22 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
     setColAggregations((prev) => ({ ...prev, [col.id]: next }));
   };
 
-  const sortedRows = database
-    ? [...database.rows].sort((a, b) => {
-        if (!sortColId) return 0;
-        const va = String(a.cells[sortColId] ?? '');
-        const vb = String(b.cells[sortColId] ?? '');
-        return sortAsc
-          ? va.localeCompare(vb, undefined, { numeric: true })
-          : vb.localeCompare(va, undefined, { numeric: true });
+  const filteredRows = database
+    ? database.rows.filter((r) => {
+        if (!filterText.trim()) return true;
+        const q = filterText.trim().toLowerCase();
+        return Object.values(r.cells).some((v) => String(v ?? '').toLowerCase().includes(q));
       })
     : [];
+
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    if (!sortColId) return 0;
+    const va = String(a.cells[sortColId] ?? '');
+    const vb = String(b.cells[sortColId] ?? '');
+    return sortAsc
+      ? va.localeCompare(vb, undefined, { numeric: true })
+      : vb.localeCompare(va, undefined, { numeric: true });
+  });
 
   const handleCellKeyDown = async (
     e: React.KeyboardEvent<HTMLInputElement>,
@@ -449,6 +500,38 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
       );
     }
 
+    if (col.type === 'createdTime' || col.type === 'lastEditedTime') {
+      const ts = col.type === 'createdTime' ? row.createdAt : row.updatedAt;
+      return (
+        <span className="text-[10px] text-stone-400 font-mono">
+          {new Date(ts).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+        </span>
+      );
+    }
+
+    if (col.type === 'email' || col.type === 'phone') {
+      const contactVal = String(val ?? '');
+      const hrefPrefix = col.type === 'email' ? 'mailto:' : 'tel:';
+      return (
+        <div className="flex items-center gap-1">
+          <input
+            type={col.type === 'email' ? 'email' : 'tel'}
+            data-ntbl={`${database?.id}-${rowIdx}-${col.id}`}
+            value={contactVal}
+            onChange={(e) => handleCellChange(row.id, col.id, e.target.value)}
+            onKeyDown={(e) => handleCellKeyDown(e, rowIdx, col.id)}
+            placeholder={col.type === 'email' ? 'name@example.com' : '+1 555...'}
+            className="w-full bg-transparent focus:outline-none"
+          />
+          {contactVal && (
+            <a href={`${hrefPrefix}${contactVal}`} className="text-stone-400 hover:text-blue-600 flex-shrink-0">
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      );
+    }
+
     if (col.type === 'image') {
       const imgUrl = String(val ?? '');
       return (
@@ -493,7 +576,13 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
 
   return (
     <NodeViewWrapper className="my-3 select-none">
-      <div className="border border-stone-200/80 dark:border-zinc-800 rounded-xl overflow-visible bg-white/90 dark:bg-zinc-900/70 shadow-2xs">
+      <div
+        className={
+          isFullPage
+            ? 'fixed inset-4 z-[9990] border border-stone-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-950 shadow-2xl overflow-y-auto'
+            : 'border border-stone-200/80 dark:border-zinc-800 rounded-xl overflow-visible bg-white/90 dark:bg-zinc-900/70 shadow-2xs'
+        }
+      >
         {/* Table Header Bar */}
         <div className="flex flex-wrap items-center justify-between px-3 py-2 bg-stone-50/70 dark:bg-zinc-950/40 border-b border-stone-200/60 dark:border-zinc-800 gap-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-stone-800 dark:text-zinc-200">
@@ -515,7 +604,91 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
+            {/* View Switcher */}
+            <div className="flex items-center bg-stone-200/60 dark:bg-zinc-800 rounded-md p-0.5 text-[10px] mr-1">
+              {[
+                { id: 'table' as const, label: 'Table', Icon: TableIcon },
+                { id: 'board' as const, label: 'Board', Icon: Kanban },
+                { id: 'list' as const, label: 'List', Icon: ListIcon },
+                { id: 'gallery' as const, label: 'Gallery', Icon: LayoutGrid },
+                { id: 'calendar' as const, label: 'Calendar', Icon: CalendarDays },
+              ].map((v) => {
+                const VIcon = v.Icon;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveView(v.id);
+                      if (database) persistDb({ ...database, defaultView: v.id });
+                    }}
+                    className={`px-1.5 py-0.5 rounded flex items-center gap-1 transition ${
+                      activeView === v.id
+                        ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 font-semibold shadow-2xs'
+                        : 'text-stone-500 dark:text-zinc-400 hover:text-stone-800 dark:hover:text-zinc-200'
+                    }`}
+                    title={`${v.label} view`}
+                  >
+                    <VIcon className="w-3 h-3" />
+                    <span className="hidden sm:inline">{v.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className={`px-1.5 py-0.5 text-[11px] rounded flex items-center gap-1 ${
+                isFilterOpen || filterText
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
+                  : 'bg-stone-200/60 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700'
+              }`}
+              title="Filter rows"
+            >
+              <Filter className="w-3 h-3" />
+            </button>
+
+            {/* Link Existing Database */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsLinkDbOpen(!isLinkDbOpen)}
+                className="px-1.5 py-0.5 text-[11px] rounded bg-stone-200/60 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center gap-1"
+                title="Switch / Link Existing Database"
+              >
+                <GitBranch className="w-3 h-3" />
+              </button>
+              {isLinkDbOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setIsLinkDbOpen(false)} />
+                  <div className="absolute right-0 mt-1 z-40 w-52 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-lg shadow-float p-1.5 text-xs max-h-48 overflow-y-auto">
+                    <div className="px-2 py-1 text-[10px] font-semibold uppercase text-stone-400">
+                      Link Existing Database
+                    </div>
+                    {allDatabases.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => {
+                          updateAttributes({ databaseId: d.id, title: d.title });
+                          setDatabase(d);
+                          setIsLinkDbOpen(false);
+                        }}
+                        className={`w-full text-left px-2 py-1 rounded hover:bg-stone-100 dark:hover:bg-zinc-800 truncate ${
+                          d.id === database?.id ? 'text-blue-600 font-semibold' : ''
+                        }`}
+                      >
+                        {d.title || 'Untitled DB'} ({d.rows.length} rows)
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -543,6 +716,14 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
             </button>
             <button
               type="button"
+              onClick={() => setIsFullPage(!isFullPage)}
+              className="p-1 text-stone-500 hover:text-blue-600 rounded"
+              title={isFullPage ? 'Exit Full Page' : 'Open Full-Page Database'}
+            >
+              {isFullPage ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              type="button"
               onClick={deleteNode}
               className="p-1 text-stone-400 hover:text-red-500 rounded"
               title="Remove table"
@@ -552,9 +733,30 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
           </div>
         </div>
 
+        {isFilterOpen && (
+          <div className="px-3 py-1.5 bg-stone-50/70 dark:bg-zinc-900/60 border-b border-stone-200/60 dark:border-zinc-800 flex items-center gap-2">
+            <Filter className="w-3 h-3 text-stone-400" />
+            <input
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Filter rows by any value..."
+              className="flex-1 bg-transparent text-xs focus:outline-none"
+              autoFocus
+            />
+            {filterText && (
+              <button type="button" onClick={() => setFilterText('')} className="text-[10px] text-stone-400 hover:text-red-500">
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {database ? (
           <div>
-            <div className="overflow-x-auto">
+            {activeView === 'table' && (
+              <>
+                <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr className="bg-stone-50/50 dark:bg-zinc-900 border-b border-stone-200/60 dark:border-zinc-800">
@@ -745,7 +947,15 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
                           {renderCell(row, rowIdx, col)}
                         </td>
                       ))}
-                      <td className="px-1 py-1 text-center">
+                      <td className="px-1 py-1 text-center flex items-center justify-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setActiveRowId(row.id)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-400 hover:text-blue-600 rounded"
+                          title="Open row as page"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteRow(row.id)}
@@ -787,11 +997,260 @@ const DatabaseBlockComponent: React.FC<NodeViewProps> = ({
               <Plus className="w-3 h-3" />
               <span>New Row</span>
             </button>
+              </>
+            )}
+
+            {/* BOARD (KANBAN) VIEW WITH DRAG & DROP */}
+            {activeView === 'board' && (() => {
+              const groupCol =
+                database.columns.find((c) => c.type === 'status' || c.type === 'select') ||
+                database.columns[0];
+              const titleCol = database.columns[0];
+              const groups =
+                groupCol && (groupCol.type === 'status' || groupCol.type === 'select')
+                  ? groupCol.options && groupCol.options.length > 0
+                    ? groupCol.options
+                    : STATUS_OPTIONS
+                  : ['All Items'];
+
+              return (
+                <div className="p-3 overflow-x-auto flex gap-3 items-start">
+                  {groups.map((grp) => {
+                    const cards = sortedRows.filter((r) => {
+                      if (!groupCol || (groupCol.type !== 'status' && groupCol.type !== 'select')) return true;
+                      return String(r.cells[groupCol.id] || groups[0]) === grp;
+                    });
+                    return (
+                      <div
+                        key={grp}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (draggedRowId && groupCol && (groupCol.type === 'status' || groupCol.type === 'select')) {
+                            handleCellChange(draggedRowId, groupCol.id, grp);
+                            setDraggedRowId(null);
+                          }
+                        }}
+                        className="w-56 flex-shrink-0 rounded-xl bg-stone-50/80 dark:bg-zinc-900/60 border border-stone-200/70 dark:border-zinc-800 p-2 space-y-2"
+                      >
+                        <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-stone-700 dark:text-zinc-200">
+                          <span>{grp}</span>
+                          <span className="text-[10px] text-stone-400">{cards.length}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {cards.map((card) => (
+                            <div
+                              key={card.id}
+                              draggable
+                              onDragStart={() => setDraggedRowId(card.id)}
+                              onClick={() => setActiveRowId(card.id)}
+                              className="p-2 rounded-lg bg-white dark:bg-zinc-950 border border-stone-200/80 dark:border-zinc-800 shadow-2xs cursor-grab hover:border-blue-400 transition"
+                            >
+                              <div className="font-medium text-xs text-stone-800 dark:text-stone-100 truncate">
+                                {String(card.cells[titleCol?.id] || 'Untitled')}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {database.columns.slice(1, 4).map((c) => {
+                                  const cv = card.cells[c.id];
+                                  if (cv === undefined || cv === '' || c.id === groupCol?.id) return null;
+                                  return (
+                                    <span key={c.id} className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 text-stone-500">
+                                      {Array.isArray(cv) ? cv.join(', ') : String(cv)}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* LIST VIEW */}
+            {activeView === 'list' && (
+              <div className="divide-y divide-stone-100 dark:divide-zinc-800/70">
+                {sortedRows.map((row) => {
+                  const titleCol = database.columns[0];
+                  return (
+                    <div
+                      key={row.id}
+                      onClick={() => setActiveRowId(row.id)}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-stone-50 dark:hover:bg-zinc-900/50 cursor-pointer transition"
+                    >
+                      <span className="font-medium text-xs text-stone-800 dark:text-stone-200 truncate">
+                        {String(row.cells[titleCol?.id] || 'Untitled')}
+                      </span>
+                      <div className="flex items-center gap-2 text-[10px] text-stone-400">
+                        {database.columns.slice(1, 4).map((c) => {
+                          const v = row.cells[c.id];
+                          if (v === undefined || v === '') return null;
+                          return (
+                            <span key={c.id} className="px-1.5 py-0.5 rounded bg-stone-100 dark:bg-zinc-800">
+                              {Array.isArray(v) ? v.join(', ') : String(v)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={handleAddRow}
+                  className="w-full py-1.5 px-3 text-left text-[11px] text-stone-500 hover:text-blue-600 flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>New Row</span>
+                </button>
+              </div>
+            )}
+
+            {/* GALLERY VIEW */}
+            {activeView === 'gallery' && (() => {
+              const titleCol = database.columns[0];
+              const imgCol = database.columns.find((c) => c.type === 'image');
+              return (
+                <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {sortedRows.map((row) => {
+                    const imgUrl = imgCol ? String(row.cells[imgCol.id] || '') : '';
+                    return (
+                      <div
+                        key={row.id}
+                        onClick={() => setActiveRowId(row.id)}
+                        className="rounded-xl border border-stone-200/80 dark:border-zinc-800 bg-stone-50/40 dark:bg-zinc-950/40 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                      >
+                        {imgUrl ? (
+                          <img src={imgUrl} alt="" className="w-full h-28 object-cover" />
+                        ) : (
+                          <div className="w-full h-16 bg-gradient-to-br from-stone-100 to-stone-200/60 dark:from-zinc-900 dark:to-zinc-800/50" />
+                        )}
+                        <div className="p-2.5 space-y-1">
+                          <div className="font-semibold text-xs text-stone-800 dark:text-stone-100 truncate">
+                            {String(row.cells[titleCol?.id] || 'Untitled')}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {database.columns.slice(1, 3).map((c) => {
+                              const v = row.cells[c.id];
+                              if (v === undefined || v === '' || c.type === 'image') return null;
+                              return (
+                                <span key={c.id} className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200/60 dark:bg-zinc-800 text-stone-600 dark:text-zinc-300">
+                                  {Array.isArray(v) ? v.join(', ') : String(v)}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* CALENDAR VIEW */}
+            {activeView === 'calendar' && (() => {
+              const dateCol = database.columns.find((c) => c.type === 'date');
+              const titleCol = database.columns[0];
+              const year = calendarMonth.getFullYear();
+              const month = calendarMonth.getMonth();
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              const firstDow = new Date(year, month, 1).getDay();
+              return (
+                <div className="p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span>
+                      {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                      {!dateCol && <span className="ml-2 text-[10px] text-amber-600 font-normal">(Add a Date column to place items)</span>}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth(new Date(year, month - 1, 1))}
+                        className="px-2 py-0.5 rounded border border-stone-200 dark:border-zinc-700"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarMonth(new Date(year, month + 1, 1))}
+                        className="px-2 py-0.5 rounded border border-stone-200 dark:border-zinc-700"
+                      >
+                        →
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-[10px]">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                      <div key={d} className="text-center font-semibold text-stone-400 py-0.5">{d}</div>
+                    ))}
+                    {Array.from({ length: firstDow }).map((_, idx) => (
+                      <div key={`empty-${idx}`} className="min-h-[48px] bg-stone-50/30 dark:bg-zinc-900/20 rounded" />
+                    ))}
+                    {Array.from({ length: daysInMonth }).map((_, idx) => {
+                      const day = idx + 1;
+                      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const dayRows = dateCol
+                        ? sortedRows.filter((r) => String(r.cells[dateCol.id] || '').startsWith(iso))
+                        : [];
+                      return (
+                        <div key={day} className="min-h-[48px] p-1 rounded border border-stone-200/60 dark:border-zinc-800/70 bg-white dark:bg-zinc-950/50 space-y-0.5">
+                          <div className="text-[9px] text-stone-400 font-mono">{day}</div>
+                          {dayRows.map((r) => (
+                            <div
+                              key={r.id}
+                              onClick={() => setActiveRowId(r.id)}
+                              className="px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 truncate cursor-pointer text-[9px]"
+                            >
+                              {String(r.cells[titleCol?.id] || 'Untitled')}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <div className="p-4 text-xs text-stone-400 italic">Loading table...</div>
         )}
       </div>
+
+      {/* Row-as-Page Drawer Modal & Full-Page Overlay Wrapper */}
+      {activeRowId && database && (() => {
+        const rowIndex = database.rows.findIndex((r) => r.id === activeRowId);
+        const row = database.rows[rowIndex];
+        if (!row) return null;
+        return (
+          <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setActiveRowId(null)}>
+            <div
+              className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 shadow-float p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-stone-200 dark:border-zinc-800 pb-2.5">
+                <div className="font-bold text-sm text-stone-900 dark:text-stone-100">
+                  {String(row.cells[database.columns[0]?.id] || 'Row Properties')}
+                </div>
+                <button type="button" onClick={() => setActiveRowId(null)} className="p-1 rounded hover:bg-stone-100 dark:hover:bg-zinc-800">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                {database.columns.map((col) => (
+                  <div key={col.id} className="grid grid-cols-3 gap-2 items-center text-xs">
+                    <div className="text-stone-500 dark:text-zinc-400 font-medium truncate">{col.name}</div>
+                    <div className="col-span-2">{renderCell(row, Math.max(0, rowIndex), col)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </NodeViewWrapper>
   );
 };

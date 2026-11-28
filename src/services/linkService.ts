@@ -19,8 +19,8 @@ export function extractInternalLinks(content: string, allNotes: Note[]): string[
   const wikiRegex = /\[\[(.*?)\]\]/g;
   while ((match = wikiRegex.exec(content)) !== null) {
     const titleOrId = match[1].trim().toLowerCase();
-    const target = allNotes.find(
-      (n) => n.id === match![1] || n.title.toLowerCase() === titleOrId
+    const target = (allNotes || []).find(
+      (n) => n && n.id && (n.id === match![1] || (n.title || '').toLowerCase() === titleOrId)
     );
     if (target) {
       referencedIds.add(target.id);
@@ -35,7 +35,7 @@ export function extractInternalLinks(content: string, allNotes: Note[]): string[
  */
 export async function syncBacklinks(currentNoteId: string, referencedNoteIds: string[]) {
   try {
-    const allNotes = await db.notes.toArray();
+    const allNotes = (await db.notes.toArray()).filter((n): n is Note => Boolean(n && typeof n === 'object' && n.id));
     for (const note of allNotes) {
       const currentBacklinks = note.backlinks || [];
       const shouldHaveBacklink = referencedNoteIds.includes(note.id);
