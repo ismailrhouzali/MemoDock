@@ -24,7 +24,9 @@ import { LinkCardNode } from './extensions/LinkCard';
 import { CalloutBlock } from './extensions/CalloutBlock';
 import { ToggleBlock } from './extensions/ToggleBlock';
 import { DatabaseBlockNode } from './extensions/DatabaseBlock';
+import { TableOfContentsBlock } from './extensions/TableOfContentsBlock';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import { MentionMenu } from './MentionMenu';
 import { IconPicker } from '../common/IconPicker';
 import { EditorToolbar } from './EditorToolbar';
 import { FindReplaceBar } from './FindReplaceBar';
@@ -65,7 +67,35 @@ import {
   ChevronRight,
   FileText,
   Link2,
+  Lock,
+  Unlock,
+  SlidersHorizontal,
+  Copy,
+  Check,
+  Image as ImageIcon,
 } from 'lucide-react';
+
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.style.backgroundColor || null,
+        renderHTML: (attrs: Record<string, any>) =>
+          attrs.backgroundColor ? { style: `background-color: ${attrs.backgroundColor}` } : {},
+      },
+    };
+  },
+});
+
+const COVER_PRESETS = [
+  'linear-gradient(120deg, #dbeafe 0%, #ede9fe 100%)',
+  'linear-gradient(120deg, #fef3c7 0%, #fde68a 100%)',
+  'linear-gradient(120deg, #d1fae5 0%, #a7f3d0 100%)',
+  'linear-gradient(120deg, #fce7f3 0%, #fbcfe8 100%)',
+  'linear-gradient(120deg, #1e293b 0%, #0f172a 100%)',
+];
 
 const lowlight = createLowlight(common);
 
@@ -166,6 +196,19 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     pos: { top: 0, left: 0 },
     query: '',
   });
+  const [mentionMenu, setMentionMenu] = useState<{
+    open: boolean;
+    trigger: '[[' | '@';
+    pos: { top: number; left: number };
+    query: string;
+  }>({
+    open: false,
+    trigger: '[[',
+    pos: { top: 0, left: 0 },
+    query: '',
+  });
+  const [isPageOptionsOpen, setIsPageOptionsOpen] = useState(false);
+  const [copiedNoteLink, setCopiedNoteLink] = useState(false);
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -200,7 +243,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       }),
       TableRow,
       TableHeader,
-      TableCell,
+      CustomTableCell,
       Underline,
       Highlight.configure({
         multicolor: true,
@@ -231,7 +274,9 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       CalloutBlock,
       ToggleBlock,
       DatabaseBlockNode,
+      TableOfContentsBlock,
     ],
+    editable: !note.isLocked,
     content: note.content || '',
     editorProps: {
       attributes: {
@@ -469,6 +514,29 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
         setSlashMenu((prev) => ({ ...prev, open: false }));
       }
 
+      // Detect "[[" internal link or "@" mention trigger
+      const wikiMatch = textBefore.match(/\[\[([^\[\]\n]*)$/);
+      const atMatch = !wikiMatch ? textBefore.match(/(?:^|\s)@([a-zA-Z0-9_-]*)$/) : null;
+      if (wikiMatch) {
+        const coords = ed.view.coordsAtPos(from);
+        setMentionMenu({
+          open: true,
+          trigger: '[[',
+          pos: { top: Math.min(window.innerHeight - 280, coords.bottom + 6), left: Math.min(window.innerWidth - 280, coords.left) },
+          query: wikiMatch[1] || '',
+        });
+      } else if (atMatch) {
+        const coords = ed.view.coordsAtPos(from);
+        setMentionMenu({
+          open: true,
+          trigger: '@',
+          pos: { top: Math.min(window.innerHeight - 280, coords.bottom + 6), left: Math.min(window.innerWidth - 280, coords.left) },
+          query: atMatch[1] || '',
+        });
+      } else if (mentionMenu.open) {
+        setMentionMenu((prev) => ({ ...prev, open: false }));
+      }
+
       onUpdateNote({
         content: html,
         plainText: text,
@@ -496,6 +564,19 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       }
     }
   }, [note.id, editor]);
+
+  // Sync per-page lock & lastViewedAt
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!note.isLocked);
+    }
+  }, [editor, note.isLocked]);
+
+  useEffect(() => {
+    if (note?.id) {
+      onUpdateNote({ lastViewedAt: Date.now() });
+    }
+  }, [note.id]);
 
   // Periodic Version Snapshot creation (saves snapshot if content significantly changed)
   useEffect(() => {
@@ -600,25 +681,29 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     (n) => n.id !== note.id && n.internalLinks && n.internalLinks.includes(note.id)
   );
 
-  // Width container class
+  // Width, font & size container classes (respecting per-page overrides)
+  const effectiveWidth = note.fullWidth ? 'full' : editorWidth;
+  const effectiveFont = note.fontStyle || editorFont;
+  const effectiveSize = note.smallText ? 'sm' : editorFontSize;
+
   const widthClasses = {
     narrow: 'max-w-2xl',
     normal: 'max-w-3xl',
     wide: 'max-w-5xl',
     full: 'max-w-full px-6',
-  }[editorWidth];
+  }[effectiveWidth];
 
   const fontClasses = {
     sans: 'font-sans',
     serif: 'font-serif',
     mono: 'font-mono',
-  }[editorFont];
+  }[effectiveFont];
 
   const fontSizeClasses = {
     sm: 'text-sm',
     md: 'text-base',
     lg: 'text-lg',
-  }[editorFontSize];
+  }[effectiveSize];
 
   // Minimal layout flags
   const isMinimal = editorLayout.mode === 'minimal';
@@ -820,6 +905,36 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               </div>
             )}
 
+            {/* Optional Cover Banner */}
+            {note.coverImage && (
+              <div className="group relative mb-5 rounded-xl overflow-hidden h-28 md:h-36 border border-stone-200/70 dark:border-zinc-800">
+                {note.coverImage.startsWith('linear-gradient') ? (
+                  <div className="w-full h-full" style={{ background: note.coverImage }} />
+                ) : (
+                  <img src={note.coverImage} alt="Note cover" className="w-full h-full object-cover" />
+                )}
+                <div className="no-print absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = COVER_PRESETS[(COVER_PRESETS.indexOf(note.coverImage || '') + 1) % COVER_PRESETS.length];
+                      onUpdateNote({ coverImage: next, updatedAt: Date.now() });
+                    }}
+                    className="px-2 py-1 rounded-md bg-white/90 dark:bg-zinc-900/90 text-[10px] font-medium shadow border border-stone-200 dark:border-zinc-700 hover:text-blue-600"
+                  >
+                    Change Cover
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateNote({ coverImage: undefined, updatedAt: Date.now() })}
+                    className="px-2 py-1 rounded-md bg-white/90 dark:bg-zinc-900/90 text-[10px] font-medium text-red-600 shadow border border-stone-200 dark:border-zinc-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Editable Note Title with Notion-style Icon & Gray Suggested Title Placeholder */}
             <div className="relative mb-4 pb-1 flex items-center gap-2">
               <div className="relative flex-shrink-0 no-print">
@@ -882,6 +997,115 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                   Tab to accept
                 </button>
               )}
+
+              {/* Compact Page Options: Cover, Copy Link, Lock, Page Style */}
+              <div className="no-print relative flex items-center gap-1 flex-shrink-0">
+                {!note.coverImage && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateNote({ coverImage: COVER_PRESETS[0], updatedAt: Date.now() })}
+                    className="p-1.5 rounded-md text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800 transition"
+                    title="Add Cover"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`notebook://note/${note.id}`);
+                    setCopiedNoteLink(true);
+                    setTimeout(() => setCopiedNoteLink(false), 1800);
+                  }}
+                  className="p-1.5 rounded-md text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800 transition"
+                  title="Copy Internal Note Link"
+                >
+                  {copiedNoteLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateNote({ isLocked: !note.isLocked, updatedAt: Date.now() })}
+                  className={`p-1.5 rounded-md transition ${
+                    note.isLocked
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600'
+                      : 'text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                  }`}
+                  title={note.isLocked ? 'Unlock Page' : 'Lock Page (Read-only)'}
+                >
+                  {note.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPageOptionsOpen(!isPageOptionsOpen)}
+                  className={`p-1.5 rounded-md transition ${
+                    isPageOptionsOpen
+                      ? 'bg-stone-200 dark:bg-zinc-800 text-stone-800 dark:text-zinc-100'
+                      : 'text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Page Style Options"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                </button>
+
+                {isPageOptionsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsPageOptionsOpen(false)} />
+                    <div className="absolute right-0 top-9 z-40 w-56 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 shadow-float text-xs space-y-3">
+                      <div className="font-semibold text-[10px] uppercase tracking-wider text-stone-400">
+                        Page Style
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['sans', 'serif', 'mono'] as EditorFont[]).map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => onUpdateNote({ fontStyle: f, updatedAt: Date.now() })}
+                            className={`py-1 rounded-md border text-[11px] capitalize ${
+                              effectiveFont === f
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 font-semibold'
+                                : 'border-stone-200 dark:border-zinc-700 text-stone-600 dark:text-zinc-300'
+                            }`}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span>Full Width</span>
+                        <input
+                          type="checkbox"
+                          checked={!!note.fullWidth}
+                          onChange={(e) => onUpdateNote({ fullWidth: e.target.checked, updatedAt: Date.now() })}
+                          className="accent-blue-600"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span>Small Text</span>
+                        <input
+                          type="checkbox"
+                          checked={!!note.smallText}
+                          onChange={(e) => onUpdateNote({ smallText: e.target.checked, updatedAt: Date.now() })}
+                          className="accent-blue-600"
+                        />
+                      </label>
+                      <div className="pt-1 border-t border-stone-200 dark:border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = window.prompt('Cover Image URL (or leave blank for gradient):', note.coverImage || '');
+                            if (url === null) return;
+                            onUpdateNote({ coverImage: url.trim() || COVER_PRESETS[0], updatedAt: Date.now() });
+                            setIsPageOptionsOpen(false);
+                          }}
+                          className="w-full text-left py-1 text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Set Custom Cover URL...
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Note-as-Dashboard Overview Cards (when note.isDashboard is active) */}
@@ -1154,6 +1378,20 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               .insertContent(`<div data-type="database-block" data-database-id="${newDb.id}" data-title="${newDb.title}"></div>`)
               .run();
           }}
+        />
+      )}
+
+      {/* @ and [[ Mention / Internal Link Menu */}
+      {editor && (
+        <MentionMenu
+          editor={editor}
+          isOpen={mentionMenu.open}
+          trigger={mentionMenu.trigger}
+          position={mentionMenu.pos}
+          query={mentionMenu.query}
+          notes={allNotes}
+          currentNoteId={note.id}
+          onClose={() => setMentionMenu((prev) => ({ ...prev, open: false }))}
         />
       )}
     </div>

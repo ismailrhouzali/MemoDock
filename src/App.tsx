@@ -18,6 +18,7 @@ import { useNotes } from './hooks/useNotes';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useTheme } from './hooks/useTheme';
 import { setupWebClipperSync } from './services/webClipperService';
+import { resolveTemplateVariables } from './utils/templateVariables';
 
 import { TopToolbar } from './components/layout/TopToolbar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -225,18 +226,22 @@ export const App: React.FC = () => {
   };
 
   const handleSelectTemplate = async (template: NoteTemplate) => {
+    const resolvedTitle = resolveTemplateVariables(template.title, template.title);
+    const resolvedContent = resolveTemplateVariables(template.content, resolvedTitle);
+    const resolvedPlain = resolvedContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
     // If current note is blank/new, populate it; otherwise create a new note
     if (activeNote && (!activeNote.plainText || activeNote.plainText.trim() === '')) {
       await updateNote(activeNote.id, {
-        title: template.title,
-        content: template.content,
-        plainText: template.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+        title: resolvedTitle,
+        content: resolvedContent,
+        plainText: resolvedPlain,
         updatedAt: Date.now(),
       });
     } else {
       const newNote = await createNote({
-        title: template.title,
-        content: template.content,
+        title: resolvedTitle,
+        content: resolvedContent,
       });
       setActiveNoteId(newNote.id);
     }

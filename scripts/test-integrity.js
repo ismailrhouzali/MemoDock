@@ -7,6 +7,7 @@ import { convertTsvToHtmlTable, isTsvTable } from '../src/services/importEngine/
 import { convertTextToTipTapHtml } from '../src/services/importEngine/smartImportEngine.ts';
 import { parseCsv, exportToCsv } from '../src/services/spreadsheet/csvEngine.ts';
 import { DEFAULT_PROFILES, DEFAULT_KEYBOARD_SHORTCUTS } from '../src/db/db.ts';
+import { resolveTemplateVariables } from '../src/utils/templateVariables.ts';
 
 console.log('=== Running NoteBook System & Extension Verification Tests ===\n');
 
@@ -299,6 +300,17 @@ assert(Array.isArray(DEFAULT_KEYBOARD_SHORTCUTS) && DEFAULT_KEYBOARD_SHORTCUTS.l
 const shortcutKeys = DEFAULT_KEYBOARD_SHORTCUTS.map(s => s.key);
 assert(shortcutKeys.some(k => k.includes('Ctrl + N')), 'Shortcuts include Ctrl+N for new note');
 assert(shortcutKeys.some(k => k.includes('Ctrl + K')), 'Shortcuts include Ctrl+K for command palette / search');
+
+// 17. Test Notion Parity M1: Template Variables & Optional Note Properties
+const fixedDate = new Date('2026-11-28T14:30:00Z');
+const resolvedTemplate = resolveTemplateVariables(
+  '<h1>{{title}}</h1><p>Date: {{date}} | Time: {{time}}</p>',
+  'Weekly Sync',
+  fixedDate
+);
+assert(resolvedTemplate.includes('<h1>Weekly Sync</h1>'), 'Template resolves {{title}} variable');
+assert(resolvedTemplate.includes('2026-11-28'), 'Template resolves {{date}} variable');
+assert(!resolvedTemplate.includes('{{time}}'), 'Template resolves {{time}} variable');
 
 console.log(`\n========================================`);
 console.log(`TOTAL TESTS: ${passedTests + failedTests} | PASSED: ${passedTests} | FAILED: ${failedTests}`);

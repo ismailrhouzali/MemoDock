@@ -20,6 +20,12 @@ export interface Note {
   backlinks?: string[]; // Note IDs that link to this note
   isAutoTitle?: boolean; // Whether note title was automatically extracted from content
   isDashboard?: boolean; // Transform note into an interactive Dashboard view
+  coverImage?: string; // Optional Notion-style cover image or CSS gradient
+  fullWidth?: boolean; // Per-page full-width override
+  smallText?: boolean; // Per-page compact/small-text override
+  fontStyle?: EditorFont; // Per-page font override
+  isLocked?: boolean; // Per-page read-only lock
+  lastViewedAt?: number; // Last time the note was opened
   order?: number; // Custom drag-and-drop sort order position
 }
 

@@ -80,15 +80,46 @@ export const TableControls: React.FC<TableControlsProps> = ({ editor }) => {
 
       <div className="h-3.5 w-px bg-stone-300 dark:bg-zinc-700 mx-0.5" />
 
-      {/* Toggle header */}
+      {/* Toggle header row & column */}
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleHeaderRow().run()}
         className="px-1.5 py-1 hover:bg-stone-200 dark:hover:bg-zinc-700 rounded text-[11px] transition"
         title="Toggle Header Row"
       >
-        Header
+        Header Row
       </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleHeaderColumn().run()}
+        className="px-1.5 py-1 hover:bg-stone-200 dark:hover:bg-zinc-700 rounded text-[11px] transition"
+        title="Toggle Header Column"
+      >
+        Header Col
+      </button>
+
+      <div className="h-3.5 w-px bg-stone-300 dark:bg-zinc-700 mx-0.5" />
+
+      {/* Cell background color */}
+      <div className="flex items-center gap-0.5 px-0.5" title="Cell Background">
+        {[
+          { label: 'Default', color: null, cls: 'bg-white dark:bg-zinc-900 border-stone-300' },
+          { label: 'Amber', color: 'rgba(251, 191, 36, 0.2)', cls: 'bg-amber-200 border-amber-400' },
+          { label: 'Blue', color: 'rgba(59, 130, 246, 0.16)', cls: 'bg-blue-200 border-blue-400' },
+          { label: 'Green', color: 'rgba(34, 197, 94, 0.18)', cls: 'bg-emerald-200 border-emerald-400' },
+          { label: 'Rose', color: 'rgba(244, 63, 94, 0.16)', cls: 'bg-rose-200 border-rose-400' },
+        ].map((swatch) => (
+          <button
+            key={swatch.label}
+            type="button"
+            onClick={() =>
+              editor.chain().focus().setCellAttribute('backgroundColor', swatch.color).run()
+            }
+            className={`w-3.5 h-3.5 rounded-full border ${swatch.cls} hover:scale-110 transition`}
+            title={`Cell background: ${swatch.label}`}
+          />
+        ))}
+      </div>
 
       {/* Delete Table */}
       <button

@@ -17,6 +17,7 @@ import {
   Link2,
   Quote,
   Minus,
+  ListTree,
 } from 'lucide-react';
 
 interface SlashCommandMenuProps {
@@ -206,6 +207,15 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       keywords: 'hr divider line',
       Icon: Minus,
       action: () => editor.chain().focus().setHorizontalRule().run(),
+    },
+    {
+      id: 'toc',
+      label: 'Table of Contents',
+      desc: 'Live clickable outline of headings in this note',
+      keywords: 'toc table of contents outline headings',
+      Icon: ListTree,
+      action: () =>
+        editor.chain().focus().insertContent('<div data-type="toc-block"></div>').run(),
     },
   ];
 
