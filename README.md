@@ -4,24 +4,24 @@
 > *Your personal knowledge workspace, right inside your browser.*  
 > *Save ideas. Organize resources. Build your knowledge.*
 
-`(Smart Notes) (Web Clipper) (Resource Library) (PDF Manager) (Spreadsheets & Data) (Local-first)`
+`(Smart Notes) • (PDF & PPTX + OCR) • (Inline Databases) • (Spreadsheets) • (Web Clipper) • (Local-First)`
 
-MemoDock is a modern, lightweight, feature-packed Chrome extension combining distraction-free, paper-like writing with an advanced personal knowledge management suite.
+MemoDock is a modern, local-first Chrome Extension (Manifest V3) combining distraction-free, paper-like writing with an advanced personal knowledge management suite — including PowerPoint-to-Markdown extraction with OCR, inline databases, KaTeX math, Mermaid diagrams, and Google Drive sync.
 
 - **GitHub Repository**: [https://github.com/ismailrhouzali/MemoDock](https://github.com/ismailrhouzali/MemoDock)
-- **Tech Stack**: Manifest V3, React 18, TypeScript, Tailwind CSS, TipTap, Dexie.js (IndexedDB), KaTeX, Mermaid, Lucide Icons.
+- **Tech Stack**: Manifest V3, React 18, TypeScript, Vite 5, Tailwind CSS, TipTap 2, Dexie.js 4 (IndexedDB), KaTeX, Mermaid, Mammoth, Marked, JSZip, Tesseract.js, Lucide Icons.
 
 ---
 
 ## 🎯 Target Audiences & Core Use Cases
 
-| Public | Besoin auquel répondre dans MemoDock |
+| Audience | How MemoDock Helps |
 | :--- | :--- |
-| **Étudiants** *(Prioritaire)* | Prise de cours instantanée, stockage léger de PDF, fiches de révisions, formules mathématiques KaTeX sans latence. |
-| **Développeurs** *(Prioritaire)* | Documentation technique, snippets de code avec coloration syntaxique, intégration GitHub, import propre de Markdown depuis ChatGPT / StackOverflow. |
-| **Chercheurs** | Articles scientifiques (arXiv), gestion des références, figures et diagrammes Mermaid, citations structurées. |
-| **Créateurs de contenu** | Idées à la volée, capture d'inspirations web par glisser-déposer, organisation par dossiers et étiquettes. |
-| **Knowledge Workers** | Centralisation et organisation de l'information, zéro dispersion cognitive entre 40 onglets, synchronisation locale et cloud sécurisé. |
+| **Students** *(Primary)* | Fast lecture note-taking, lightweight PDF storage, PowerPoint (`.pptx`) slide + OCR import to Markdown, revision sheets, instant KaTeX math formulas. |
+| **Developers** *(Primary)* | Technical docs, syntax-highlighted code blocks (40+ languages via `lowlight`), Mermaid architecture diagrams, clean Markdown paste from AI chats & docs. |
+| **Researchers** | Paper organization, PDF viewer with ephemeral URLs, structured citations, inline databases, and interactive tables. |
+| **Content Creators** | Quick idea capture, drag-and-drop web link cards, folder & tag organization, custom icons/emojis. |
+| **Knowledge Workers** | Unified local-first workspace in a full tab or Chrome Side Panel, zero tab overload, optional Google Drive backup. |
 
 ---
 
@@ -29,108 +29,134 @@ MemoDock is a modern, lightweight, feature-packed Chrome extension combining dis
 
 ### Option 1: Load the Extension via Developer Mode (Recommended)
 
-1. Clone or download this repository:
+1. Clone and build the repository:
    ```bash
    git clone https://github.com/ismailrhouzali/MemoDock.git
    cd MemoDock
    npm install
    npm run build
    ```
-2. Open Google Chrome and go to:
-   ```
-   chrome://extensions
-   ```
-3. Enable **Developer mode** using the toggle switch in the top-right corner.
-4. Click **"Load unpacked"** (Charger l'extension non empaquetée) in the top-left corner.
-5. Select the **`dist`** folder inside the `MemoDock` directory.
-6. MemoDock is installed! Pin it to your Chrome toolbar for instant access.
+2. Open Google Chrome and navigate to `chrome://extensions`.
+3. Enable **Developer mode** (top-right toggle).
+4. Click **Load unpacked** (top-left) and select the **`dist`** folder inside `MemoDock`.
+5. Pin **MemoDock** to your Chrome toolbar — clicking the icon opens MemoDock directly in a dedicated full tab (or use the Chrome Side Panel).
 
 ### Option 2: Pre-packaged ZIP
 
-Download `memodock-extension.zip` directly from the releases or the landing page (`landing.html`), extract it to a folder, and select that folder in `chrome://extensions` via **Load unpacked**.
+Download `memodock-extension.zip` (generated in `dist/` and `public/`), extract it to a folder, and load that folder via **Load unpacked** in `chrome://extensions`.
+
+---
+
+## 🎨 Design & Workspace Architecture
+
+- **Minimalist Mode & Complete Mode**: Runs in a clean, distraction-free Minimalist Mode by default (with Complete Mode available in Settings), plus **Focus Mode (`F11`)**.
+- **6 Calibrated Visual Themes**: Clean White, Warm Sepia, Cool Frost, Soft Gray, Midnight Navy, and Deep AMOLED, paired with a custom hex accent palette.
+- **5 Curated Workspace Profiles**:
+  - **Study & Courses** · **Engineering & Code** · **Academic Research** · **Distraction-Free Writing** · **Balanced Daily**
+- **Unified Sidebar Tree**:
+  - Folders and notes live together in one unified hierarchy (folders collapsed by default).
+  - Manual **drag-and-drop** reordering for both folders and notes, plus drag-and-drop notes into folders.
+  - Inline CRUD for folders and notes, and **any custom emoji/icon** support (curated categories, search, or paste/type any emoji via `Win + .`).
+- **Typography, Zoom & Polished Titles**:
+  - Placeholder note titles rendered in subtle gray.
+  - Built-in **Zoom In / Zoom Out** controls in the top-right `...` menu, resizable sidebar (`200px–450px`), and scroll-synchronized Table of Contents.
+- **Dashboard Views**:
+  - Toggleable **Workspace Dashboard** (`DashboardView`) for quick access to pinned and recent notes.
+  - **Note Dashboard Mode**: Transform any note into an interactive dashboard summarizing tasks, tables, and sub-pages.
+- **Built-in Onboarding & Help**: Interactive getting-started & customization guide (`HelpModal`).
 
 ---
 
 ## 💡 Key Features
 
-### 1. Smart Notes & Distraction-Free Writing
-- **Minimalist Mode vs Complete Mode**: Switch in one click between pure digital paper (zero clutter, no formatting toolbars or metadata) and a full-featured workspace with outline table of contents.
-- **LaTeX Math (KaTeX)**: Real-time rendering of inline ($\bar{Y}$) and block ($E = mc^2$) mathematical formulas.
-- **Mermaid Diagrams**: Flowcharts, sequence diagrams, mindmaps, and architecture diagrams rendered live.
-- **Code Highlighting**: Full syntax highlighting across 40+ programming languages powered by `lowlight`.
-- **Interactive Tables & Task Lists**: Checklist items and spreadsheet tables.
+### 1. Rich TipTap Editor & Custom Blocks
+- **Slash Commands (`/`)**, floating formatting toolbar, context menu, and in-editor **Find & Replace (`Ctrl+F`)**.
+- **LaTeX Math (KaTeX)**: Real-time inline (`\(...\)` / `$...$`) and block (`\[...\]` / `$$...$$`) equations with currency-safe detection.
+- **Mermaid Diagrams**: Live rendering of flowcharts, sequence diagrams, mindmaps, ER diagrams, and more.
+- **Interactive Blocks**: Callouts (`CalloutBlock`), collapsible toggles (`ToggleBlock`), task checklists, syntax-highlighted code blocks, and **any-emoji insertion** directly from the toolbar.
+- **Enhanced Images (`EnhancedImage`)**: Paste images directly from clipboard, upload files, resize, preview, and download.
 
-### 2. High-Performance PDF Manager (Zero Browser Bloat)
-- **Binary Blob Storage**: PDFs are stored as native binary blobs in IndexedDB rather than heavy base64 strings in text memory, keeping your browser fast and light.
-- **On-Demand Ephemeral URLs**: Generates temporary viewer URLs on demand and automatically revokes them when closing previews.
-- **Embedded or Compact Cards**: View PDFs as sleek compact cards or expand into embedded interactive viewers.
+### 2. PowerPoint (`.pptx`) to Markdown + OCR
+- Import `.pptx` presentations directly from the editor toolbar or the **Universal Smart Import** modal (`ImportModal`).
+- Extracts **slide titles, body text, nested bullet lists, tables, speaker notes, and embedded images** using `jszip` + `marked`.
+- Runs client-side **OCR (`tesseract.js`, `eng+fra`)** on extracted slide images and appends recognized text cleanly into the generated Markdown note.
 
-### 3. Drag & Drop Link Cards
-- **Matching Visual Cards**: Links are displayed inside notes with the exact same elegant card styling as PDF attachments (domain favicon, title, hostname badge, copy URL button, and embedded iframe preview).
-- **Universal Drag & Drop**: Drag and drop any link from your browser into your notes or the Resource Library.
+### 3. Inline Databases & Spreadsheets
+- **Inline Databases (`DatabaseBlock`)**: Notion-style editable tables inside notes supporting `Text`, `Select`, `Multi-select`, `Status`, `Date`, `Person`, `Image`, and formula fields (`databaseFormula.ts`) with Excel-like editing.
+- **CSV & Excel Spreadsheets (`SpreadsheetNode`)**: Native RFC 4180 CSV parser (`csvEngine.ts`) and multi-sheet `.xlsx` parser (`xlsxEngine.ts`) embeddable directly inside notes.
 
-### 4. Universal Smart Content Import Engine
-- Intelligent format-detection and auto-cleaning pipeline.
-- Handles content copied from **ChatGPT, Claude, Gemini, Notion, VS Code, GitHub, StackOverflow, Google Docs, and web articles**.
-- Automatically converts tables, code blocks, lists, and LaTeX equations into native TipTap nodes.
+### 4. High-Performance PDF Manager & Link Cards
+- **Binary Blob PDF Storage**: PDFs are stored as binary blobs in IndexedDB (`pdfStorageService.ts`) with ephemeral object URLs and compact or embedded viewer modes (`DocumentHub`, `PdfViewerModal`).
+- **Link Cards (`LinkCard`)**: Pasted or imported URLs render as clean cards (compact, mention, or embedded) matching PDF/CSV attachments and open safely in a new tab (`_blank`).
 
-### 5. Personal Resource Library & Web Clipper
-- Bookmark and catalog research links, articles, and snippets.
-- One-click active tab capture or right-click text selection clipping.
-- Filter by collections, search, and export.
+### 5. Universal Smart Import & Export
+- **Smart Clipboard Engine**: Automatically cleans and converts content copied from ChatGPT, Claude, Gemini, Notion, VS Code, GitHub, StackOverflow, Google Docs, and spreadsheet TSVs.
+- **Multi-Format File Import**: `.pptx` (+ OCR), `.docx` (via `mammoth`), `.pdf` (text extraction or attachment), `.md`, `.html`, `.txt`, `.csv`, and `.xlsx`.
+- **Export & Share**: Print-ready PDF export, Markdown, HTML, JSON backup, `ExportModal`, and `ShareModal`.
+- **Extras**: Built-in **AI Assistant** (`AIAssistantModal`), **Templates** (`TemplatesModal`), and **Version History** (`VersionHistoryModal`).
 
-### 6. Interactive CSV & Excel Spreadsheets Module
-- **Zero-Dependency Native Parsing**: RFC 4180 CSV parser with automatic delimiter detection and native multi-sheet Excel `.xlsx` decompression using browser `DecompressionStream`.
-- **Full In-Browser Spreadsheet Hub**: Sortable columns, cell editing, add/remove rows and columns, sheet tabs, and CSV export.
-- **Embeddable Inside Notes**: Seamlessly embed any spreadsheet workbook inside notes with live editable preview tables or compact card badges.
-
-### 7. Curated Workspace Profiles & Personalization
-- **1-Click Profile Presets**:
-  - **Study & Courses**: Soft gray theme, Inter sans-serif typography, balanced layout with right-hand outline.
-  - **Engineering & Code**: Dark midnight theme, Monospace font, wide editor canvas, full toolset.
-  - **Academic Research**: Warm sepia paper theme, Serif typography, pinned outline, KaTeX mathematical equations.
-  - **Distraction-Free Writing**: Pure paper canvas, minimal sidebar, hidden chrome, maximum focus.
-  - **Balanced Daily**: Default daily driver layout.
-- **Custom Accent Colors & Visual Themes**: 6 calibrated themes (Clean White, Warm Sepia, Cool Frost, Soft Gray, Midnight Navy, Deep AMOLED) and custom hex accent palette.
-- **Draggable Sidebar & Synchronized Outline**: Smooth edge-resizer (200px–450px) and real-time scroll-synchronized Table of Contents.
-
-### 8. 100% Local-First Privacy & Multi-Device Sync
-- Data is stored strictly on your machine in IndexedDB.
-- Optional Google Drive cloud backup with conflict resolution.
-- Optional file system directory sync as readable Markdown (`notes/*.md`).
+### 6. 100% Local-First Privacy & Sync
+- All notes, folders, tags, attachments, and databases are stored locally in **IndexedDB** via Dexie.js (`src/db/db.ts`).
+- Optional **Google Drive Cloud Sync** (`googleDriveService.ts`) with conflict resolution and an in-app setup guide for local unpacked Chrome extensions.
+- Optional local file-system sync.
 
 ---
 
-## ⌨️ Shortcuts Reference
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
 | `Alt + N` | Open MemoDock quick popup anywhere in Chrome |
 | `Ctrl + Shift + K` | Open MemoDock in a dedicated full-screen tab |
-| `Ctrl + K` | Open Omnibar search across notes and resources |
+| `Ctrl + K` | Open Omnibar search across notes |
 | `Ctrl + N` | Create a new note |
+| `Delete` | Move the active note to Trash (when not typing in an input/editor) |
 | `F11` | Toggle Focus Mode |
-| `Ctrl + F` | In-editor Find & Replace bar |
+| `Ctrl + F` | Open in-editor Find & Replace bar |
+| `Esc` | Close active modal or focus overlay |
+
+---
+
+## 📁 Project Structure
+
+```text
+src/
+├── App.tsx                         # Main workspace shell, shortcuts, theme & modal orchestration
+├── background/index.ts             # MV3 Service Worker (context menus & keyboard commands)
+├── db/                             # Dexie IndexedDB schema & TypeScript types
+├── hooks/                          # useNotes, useAutoSave, useTheme
+├── components/
+│   ├── common/                     # ContextMenu, IconPicker (custom & categorized emojis)
+│   ├── dashboard/                  # DashboardView
+│   ├── editor/                     # TipTapEditor, EditorToolbar, SlashCommandMenu, TableOfContents, extensions/
+│   ├── layout/                     # Sidebar, TopToolbar, StatusBar
+│   ├── modals/                     # ImportModal, ExportModal, SettingsModal, ShareModal, HelpModal, SearchModal, ...
+│   └── pdf/                        # DocumentHub, PdfViewerModal
+└── services/
+    ├── importEngine/               # smartImportEngine, pptxParser (+ OCR), fileParsers, mathProcessor, ...
+    ├── spreadsheet/                # csvEngine, xlsxEngine, spreadsheetService
+    ├── storage/                    # storageManager
+    └── ...                         # exportService, googleDriveService, pdfStorageService, linkService, aiService
+```
 
 ---
 
 ## 🧪 Verification & Integrity Tests
 
-MemoDock includes an extensive test suite verifying:
+MemoDock includes an automated verification suite covering:
 - Chrome Manifest V3 declarations, OAuth configuration, and permissions
-- Background Service Worker registration
-- HTML container dimensions (enforcing 760×580 popup constraint)
-- LaTeX mathematics recognition and currency protection
-- TSV and CSV RFC 4180 parsing and round-trip export
-- French educational content regression parsing
-- Table of Contents heading hierarchy extraction (H1–H4)
-- Workspace Profiles and Keyboard Shortcuts definitions
+- Background Service Worker & popup/sidepanel HTML constraints
+- LaTeX math conversion and currency protection (`$230,000`, `$50.00`)
+- TSV / CSV RFC 4180 parsing and round-trip export
+- French educational content normalization & ASCII code block handling
+- Table of Contents extraction (H1–H4) & internal `[[link]]` extraction
+- Backup JSON v2.0 schema, Workspace Profiles, and Keyboard Shortcuts
 
 Run tests anytime:
 ```bash
 npm test
 ```
-All 91/91 tests pass with 0 errors.
+All **93/93** tests pass with 0 errors.
 
 ---
 
