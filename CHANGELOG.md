@@ -2,6 +2,14 @@
 
 All notable changes to MemoDock are documented in this file.
 
+## [2.4.0-parity-m4] - 2026-11-28
+### Added
+- **Dexie v6 Migration (`db.ts`, `types.ts`)**: Added `comments` and `syncedBlocks` tables with non-destructive upgrade hook.
+- **Action Button Block (`ActionButtonBlock.tsx`)**: `/button` block to insert configurable template snippets (`{{date}}`, `{{time}}`) in one click.
+- **Synced Blocks (`SyncedBlock.tsx`)**: `/sync` reusable content block synced across notes via `db.syncedBlocks`.
+- **Local Comments (`TipTapEditor.tsx`)**: Per-note comment thread popover with Resolve/Reopen/Delete backed by `db.comments`.
+- **Scheduled Date Reminders (`manifest.json`, `background/index.ts`, `TipTapEditor.tsx`)**: Added `alarms` and `notifications` permissions and `Bell` reminder scheduler.
+
 ## [2.3.0-parity-m3] - 2026-11-28
 ### Added
 - **Database Views (`DatabaseBlock.tsx`)**: Table, Board (Kanban with drag-and-drop), List, Gallery, and Calendar views with live filter bar, Row-as-Page properties drawer, Full-Page expand mode, and Linked Database switcher.

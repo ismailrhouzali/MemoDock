@@ -54,10 +54,11 @@ Download `memodock-extension.zip` (generated in `dist/` and `public/`), extract 
 - **5 Curated Workspace Profiles**:
   - **Study & Courses** · **Engineering & Code** · **Academic Research** · **Distraction-Free Writing** · **Balanced Daily**
 - **Unified Sidebar Tree**:
-  - Folders and notes live together in one unified hierarchy (folders collapsed by default).
+  - Folders and notes live together in one unified hierarchy (folders collapsed by default), with **recursive nested sub-pages** (`parentNoteId`) and expand/collapse carets.
   - Manual **drag-and-drop** reordering for both folders and notes, plus drag-and-drop notes into folders.
   - Inline CRUD for folders and notes, and **any custom emoji/icon** support (curated categories, search, or paste/type any emoji via `Win + .`).
-- **Typography, Zoom & Polished Titles**:
+- **Per-Page Customization, Cover Banner & Lock**:
+  - Optional **Cover Banner** (gradient presets or custom URL), **Full Width**, **Small Text**, **Font Style** (`sans`/`serif`/`mono`) override, **Lock Page** (read-only), `lastViewedAt` tracking, and one-click **Copy Internal Note Link** (`notebook://note/<id>`).
   - Placeholder note titles rendered in subtle gray.
   - Built-in **Zoom In / Zoom Out** controls in the top-right `...` menu, resizable sidebar (`200px–450px`), and scroll-synchronized Table of Contents.
 - **Dashboard Views**:
@@ -69,12 +70,15 @@ Download `memodock-extension.zip` (generated in `dist/` and `public/`), extract 
 
 ## 💡 Key Features
 
-### 1. Rich TipTap Editor & Custom Blocks
-- **Slash Commands (`/`)**, floating formatting toolbar, context menu, and in-editor **Find & Replace (`Ctrl+F`)**.
-- **LaTeX Math (KaTeX)**: Real-time inline (`\(...\)` / `$...$`) and block (`\[...\]` / `$$...$$`) equations with currency-safe detection.
-- **Mermaid Diagrams**: Live rendering of flowcharts, sequence diagrams, mindmaps, ER diagrams, and more.
-- **Interactive Blocks**: Callouts (`CalloutBlock`), collapsible toggles (`ToggleBlock`), task checklists, syntax-highlighted code blocks, and **any-emoji insertion** directly from the toolbar.
-- **Enhanced Images (`EnhancedImage`)**: Paste images directly from clipboard, upload files, resize, preview, and download.
+### 1. Rich TipTap Editor & Notion-Style Blocks
+- **Block Drag Handle & Action Menu**: Hover grip (`⋮⋮`) beside top-level blocks to Move Up/Down, Duplicate, Delete, or Turn Into another block type.
+- **Slash Commands (`/`)**, `@` Mentions (pages & `@today`/`@tomorrow`/`@now`), `[[` Page Autocomplete, floating formatting toolbar, context menu, and **Find & Replace (`Ctrl+F`)**.
+- **Layout & Structure Blocks**:
+  - **Multi-Column Layout (`/2col`, `/3col`)**, **Toggle Headings (`/th1`, `/th2`)**, **Inline Table of Contents (`/toc`)**, **Sub-Page Block (`/page`)**, **Synced Blocks (`/sync`)**, and **Action Button Block (`/button`)** with template variables (`{{date}}`, `{{time}}`, `{{title}}`).
+  - **Callouts (`CalloutBlock`)**, collapsible **Toggles (`ToggleBlock`)**, task checklists, syntax-highlighted code blocks, and **any-emoji insertion** directly from the toolbar.
+- **LaTeX Math (KaTeX)** & **Mermaid Diagrams**: Real-time inline/block equations and live flowcharts, sequence diagrams, mindmaps, and ER diagrams.
+- **Enhanced Tables & Images**: Header row/column toggles, cell background colors (`TableControls`), and clipboard image paste/upload/resize/download (`EnhancedImage`).
+- **Local Comments & Date Reminders**: Local per-note comment threads (`db.comments`) and scheduled notification reminders powered by `chrome.alarms` & `chrome.notifications`.
 
 ### 2. PowerPoint (`.pptx`) to Markdown + OCR
 - Import `.pptx` presentations directly from the editor toolbar or the **Universal Smart Import** modal (`ImportModal`).
@@ -82,7 +86,10 @@ Download `memodock-extension.zip` (generated in `dist/` and `public/`), extract 
 - Runs client-side **OCR (`tesseract.js`, `eng+fra`)** on extracted slide images and appends recognized text cleanly into the generated Markdown note.
 
 ### 3. Inline Databases & Spreadsheets
-- **Inline Databases (`DatabaseBlock`)**: Notion-style editable tables inside notes supporting `Text`, `Select`, `Multi-select`, `Status`, `Date`, `Person`, `Image`, and formula fields (`databaseFormula.ts`) with Excel-like editing.
+- **Inline & Full-Page Databases (`DatabaseBlock`)**:
+  - **5 Views**: **Table**, **Board (Kanban with drag-and-drop)**, **List**, **Gallery**, and **Calendar**.
+  - **17 Property Types**: `Text`, `Number`, `Formula`, `Select`, `Multi-select`, `Status`, `Date`, `Person`, `Image`, `Checkbox`, `URL`, `Email`, `Phone`, `Created Time`, `Last Edited`, `Relation`, and `Rollup`.
+  - Live filter bar, **Row-as-Page Drawer**, Full-Page expand mode, Linked Database switcher, and CSV/XLSX import & export.
 - **CSV & Excel Spreadsheets (`SpreadsheetNode`)**: Native RFC 4180 CSV parser (`csvEngine.ts`) and multi-sheet `.xlsx` parser (`xlsxEngine.ts`) embeddable directly inside notes.
 
 ### 4. High-Performance PDF Manager & Link Cards
@@ -156,7 +163,7 @@ Run tests anytime:
 ```bash
 npm test
 ```
-All **93/93** tests pass with 0 errors.
+All **107/107** tests pass with 0 errors.
 
 ---
 

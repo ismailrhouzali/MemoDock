@@ -20,6 +20,8 @@ import {
   ListTree,
   Columns,
   FilePlus,
+  Zap,
+  RefreshCw,
 } from 'lucide-react';
 
 interface SlashCommandMenuProps {
@@ -30,6 +32,7 @@ interface SlashCommandMenuProps {
   onClose: () => void;
   onCreateDatabase?: () => void;
   onCreateSubPageInline?: () => void;
+  onCreateSyncedBlock?: () => void;
 }
 
 interface SlashItem {
@@ -49,6 +52,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   onClose,
   onCreateDatabase,
   onCreateSubPageInline,
+  onCreateSyncedBlock,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -280,6 +284,29 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
             '<div data-type="column-layout" data-columns="3"><div data-type="column-item"><p>Column 1</p></div><div data-type="column-item"><p>Column 2</p></div><div data-type="column-item"><p>Column 3</p></div></div>'
           )
           .run(),
+    },
+    {
+      id: 'action-button',
+      label: 'Action Button',
+      desc: 'One-click button to insert a template snippet',
+      keywords: 'button action template trigger',
+      Icon: Zap,
+      action: () =>
+        editor
+          .chain()
+          .focus()
+          .insertContent('<div data-type="action-button-block" data-label="Add Daily Check-in"></div>')
+          .run(),
+    },
+    {
+      id: 'synced-block',
+      label: 'Synced Block',
+      desc: 'Reusable block synced across multiple notes',
+      keywords: 'sync synced block reuse',
+      Icon: RefreshCw,
+      action: () => {
+        if (onCreateSyncedBlock) onCreateSyncedBlock();
+      },
     },
   ];
 

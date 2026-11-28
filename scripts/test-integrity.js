@@ -326,6 +326,12 @@ const dbBlockSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/edit
 assert(dbBlockSrc.includes("activeView === 'board'"), 'DatabaseBlock supports Board view');
 assert(dbBlockSrc.includes("activeView === 'calendar'"), 'DatabaseBlock supports Calendar view');
 
+// 20. Test Notion Parity M4: ActionButton, SyncedBlock, Dexie v6 & Alarms
+assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/ActionButtonBlock.tsx')), 'ActionButtonBlock.tsx exists');
+assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/SyncedBlock.tsx')), 'SyncedBlock.tsx exists');
+assert(Array.isArray(manifest.permissions) && manifest.permissions.includes('alarms'), 'Manifest includes alarms permission');
+assert(Array.isArray(manifest.permissions) && manifest.permissions.includes('notifications'), 'Manifest includes notifications permission');
+
 console.log(`\n========================================`);
 console.log(`TOTAL TESTS: ${passedTests + failedTests} | PASSED: ${passedTests} | FAILED: ${failedTests}`);
 console.log(`========================================\n`);

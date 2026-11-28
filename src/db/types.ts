@@ -181,6 +181,23 @@ export interface NoteTemplate {
   createdAt: number;
 }
 
+export interface NoteComment {
+  id: string;
+  noteId: string;
+  blockId?: string;
+  author: string;
+  text: string;
+  resolved: boolean;
+  createdAt: number;
+}
+
+export interface SyncedBlockRecord {
+  id: string;
+  title: string;
+  content: string;
+  updatedAt: number;
+}
+
 export interface Folder {
   id: string;
   name: string;

@@ -9,7 +9,9 @@
     "unlimitedStorage",
     "activeTab",
     "sidePanel",
-    "identity"
+    "identity",
+    "alarms",
+    "notifications"
   ],
   "oauth2": {
     "client_id": "848243452277-memodock.apps.googleusercontent.com",

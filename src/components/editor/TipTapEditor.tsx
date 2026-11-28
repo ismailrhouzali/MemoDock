@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -28,6 +29,8 @@ import { TableOfContentsBlock } from './extensions/TableOfContentsBlock';
 import { ToggleHeading } from './extensions/ToggleHeading';
 import { SubPageBlock } from './extensions/SubPageBlock';
 import { ColumnLayout, ColumnItem } from './extensions/ColumnLayout';
+import { ActionButtonBlock } from './extensions/ActionButtonBlock';
+import { SyncedBlock } from './extensions/SyncedBlock';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { MentionMenu } from './MentionMenu';
 import { BlockHandleMenu } from './BlockHandleMenu';
@@ -77,6 +80,8 @@ import {
   Copy,
   Check,
   Image as ImageIcon,
+  Bell,
+  MessageSquare,
 } from 'lucide-react';
 
 const CustomTableCell = TableCell.extend({
@@ -213,6 +218,17 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   });
   const [isPageOptionsOpen, setIsPageOptionsOpen] = useState(false);
   const [copiedNoteLink, setCopiedNoteLink] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [commentInput, setCommentInput] = useState('');
+  const [isReminderOpen, setIsReminderOpen] = useState(false);
+  const [reminderDateTime, setReminderDateTime] = useState('');
+  const [reminderSaved, setReminderSaved] = useState(false);
+
+  const noteComments =
+    useLiveQuery(
+      () => db.comments.where('noteId').equals(note.id).sortBy('createdAt'),
+      [note.id]
+    ) || [];
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -284,6 +300,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       SubPageBlock,
       ColumnLayout,
       ColumnItem,
+      ActionButtonBlock,
+      SyncedBlock,
     ],
     editable: !note.isLocked,
     content: note.content || '',
@@ -1045,6 +1063,35 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setIsReminderOpen(!isReminderOpen)}
+                  className={`p-1.5 rounded-md transition ${
+                    reminderSaved
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600'
+                      : 'text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Schedule Reminder"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCommentsOpen(!isCommentsOpen)}
+                  className={`relative p-1.5 rounded-md transition ${
+                    isCommentsOpen
+                      ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600'
+                      : 'text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Local Comments"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  {noteComments.filter((c) => !c.resolved).length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center font-bold">
+                      {noteComments.filter((c) => !c.resolved).length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => onUpdateNote({ isLocked: !note.isLocked, updatedAt: Date.now() })}
                   className={`p-1.5 rounded-md transition ${
                     note.isLocked
@@ -1122,6 +1169,130 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
                         >
                           Set Custom Cover URL...
                         </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {isReminderOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsReminderOpen(false)} />
+                    <div className="absolute right-0 top-9 z-40 w-64 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 shadow-float text-xs space-y-2.5">
+                      <div className="font-semibold text-[10px] uppercase tracking-wider text-stone-400">
+                        Schedule Notification Reminder
+                      </div>
+                      <input
+                        type="datetime-local"
+                        value={reminderDateTime}
+                        onChange={(e) => setReminderDateTime(e.target.value)}
+                        className="w-full px-2 py-1 rounded-md border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-950 text-xs"
+                      />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                              chrome.runtime.sendMessage({ action: 'CLEAR_REMINDER', noteId: note.id });
+                            }
+                            setReminderSaved(false);
+                            setIsReminderOpen(false);
+                          }}
+                          className="px-2 py-1 rounded text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-800"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!reminderDateTime) return;
+                            const when = new Date(reminderDateTime).getTime();
+                            if (isNaN(when) || when <= Date.now()) return;
+                            if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                              chrome.runtime.sendMessage({
+                                action: 'SET_REMINDER',
+                                noteId: note.id,
+                                when,
+                                title: note.title || 'MemoDock Reminder',
+                                message: `Reminder for "${note.title || 'Untitled Note'}"`,
+                              });
+                            }
+                            setReminderSaved(true);
+                            setIsReminderOpen(false);
+                          }}
+                          className="px-2.5 py-1 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                        >
+                          Set Reminder
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {isCommentsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsCommentsOpen(false)} />
+                    <div className="absolute right-0 top-9 z-40 w-72 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 shadow-float text-xs space-y-2.5">
+                      <div className="font-semibold text-[10px] uppercase tracking-wider text-stone-400">
+                        Local Comments ({noteComments.length})
+                      </div>
+                      <div className="max-h-44 overflow-y-auto space-y-1.5">
+                        {noteComments.length === 0 ? (
+                          <div className="text-[11px] text-stone-400 italic py-2">No comments yet.</div>
+                        ) : (
+                          noteComments.map((c) => (
+                            <div
+                              key={c.id}
+                              className={`p-2 rounded-lg border text-[11px] space-y-1 ${
+                                c.resolved
+                                  ? 'opacity-60 border-stone-200/50 dark:border-zinc-800/50 bg-stone-50/40 dark:bg-zinc-950/30'
+                                  : 'border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-[10px] text-stone-400">
+                                <span>{new Date(c.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => db.comments.update(c.id, { resolved: !c.resolved })}
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    {c.resolved ? 'Reopen' : 'Resolve'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => db.comments.delete(c.id)}
+                                    className="text-red-500 hover:underline"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                              <div className={c.resolved ? 'line-through' : ''}>{c.text}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 pt-1 border-t border-stone-200 dark:border-zinc-800">
+                        <input
+                          type="text"
+                          value={commentInput}
+                          onChange={(e) => setCommentInput(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter' && commentInput.trim()) {
+                              await db.comments.add({
+                                id: `cmt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                noteId: note.id,
+                                author: 'Me',
+                                text: commentInput.trim(),
+                                resolved: false,
+                                createdAt: Date.now(),
+                              });
+                              setCommentInput('');
+                            }
+                          }}
+                          placeholder="Add a comment + Enter"
+                          className="flex-1 px-2 py-1 rounded border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-950 text-xs focus:outline-none"
+                        />
                       </div>
                     </div>
                   </>
@@ -1375,6 +1546,21 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           position={slashMenu.pos}
           query={slashMenu.query}
           onClose={() => setSlashMenu((prev) => ({ ...prev, open: false }))}
+          onCreateSyncedBlock={async () => {
+            const now = Date.now();
+            const syncedId = `sync-${now}-${Math.random().toString(36).substring(2, 6)}`;
+            await db.syncedBlocks.put({
+              id: syncedId,
+              title: 'Synced Block',
+              content: '',
+              updatedAt: now,
+            });
+            editor
+              .chain()
+              .focus()
+              .insertContent(`<div data-type="synced-block" data-synced-id="${syncedId}"></div>`)
+              .run();
+          }}
           onCreateSubPageInline={async () => {
             const subTitle = window.prompt('Sub-page title:', 'Untitled Sub-page');
             if (subTitle === null) return;

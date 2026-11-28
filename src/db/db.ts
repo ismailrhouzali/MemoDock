@@ -12,6 +12,8 @@ import {
   ResourceCollection,
   Spreadsheet,
   NoteDatabase,
+  NoteComment,
+  SyncedBlockRecord,
   WorkspaceProfile,
   KeyboardShortcut,
 } from './types';
@@ -28,6 +30,8 @@ export class NotebookDB extends Dexie {
   collections!: Table<ResourceCollection, string>;
   spreadsheets!: Table<Spreadsheet, string>;
   databases!: Table<NoteDatabase, string>;
+  comments!: Table<NoteComment, string>;
+  syncedBlocks!: Table<SyncedBlockRecord, string>;
 
   constructor() {
     super('NotebookDB');
@@ -89,6 +93,27 @@ export class NotebookDB extends Dexie {
       spreadsheets: 'id, title, collection, *tags, noteId, isPinned, isFavorite, isArchived, isTrash, createdAt, updatedAt',
       databases: 'id, title, noteId, createdAt, updatedAt',
     });
+
+    // Version 6: Local Block Comments & Synced Blocks
+    this.version(6)
+      .stores({
+        notes: 'id, title, createdAt, updatedAt, folderId, parentNoteId, *tags, isPinned, isFavorite, isArchived, isTrash, *internalLinks, *backlinks',
+        folders: 'id, name, createdAt, updatedAt',
+        tags: 'id, &name',
+        attachments: 'id, noteId, name, type, createdAt',
+        noteVersions: 'id, noteId, createdAt',
+        templates: 'id, title, category, isBuiltin',
+        conflicts: 'id, noteId, detectedAt, resolved',
+        resources: 'id, url, title, domain, type, collection, *tags, isPinned, isFavorite, isArchived, isTrash, createdAt, lastOpenedAt',
+        collections: 'id, name, createdAt',
+        spreadsheets: 'id, title, collection, *tags, noteId, isPinned, isFavorite, isArchived, isTrash, createdAt, updatedAt',
+        databases: 'id, title, noteId, createdAt, updatedAt',
+        comments: 'id, noteId, blockId, createdAt',
+        syncedBlocks: 'id, updatedAt',
+      })
+      .upgrade(() => {
+        // Non-destructive additive schema upgrade
+      });
   }
 }
 

@@ -132,6 +132,47 @@ chrome.commands.onCommand.addListener((command) => {
   }
 });
 
+if (chrome.alarms && chrome.alarms.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (!alarm.name.startsWith('memodock-reminder-')) return;
+    chrome.storage.local.get(alarm.name).then((res) => {
+      const info = res[alarm.name] as { title?: string; message?: string } | undefined;
+      if (chrome.notifications && chrome.notifications.create) {
+        chrome.notifications.create(alarm.name, {
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: info?.title || 'MemoDock Reminder',
+          message: info?.message || 'Scheduled note reminder',
+          priority: 2,
+        });
+      }
+      chrome.storage.local.remove(alarm.name).catch(() => {});
+    });
+  });
+}
+
+if (chrome.runtime && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.action === 'SET_REMINDER' && msg.noteId && msg.when) {
+      const alarmName = `memodock-reminder-${msg.noteId}`;
+      chrome.storage.local
+        .set({ [alarmName]: { title: msg.title || 'MemoDock Reminder', message: msg.message || '' } })
+        .then(() => {
+          chrome.alarms?.create(alarmName, { when: Number(msg.when) });
+          sendResponse({ ok: true });
+        })
+        .catch((err) => sendResponse({ ok: false, error: String(err) }));
+      return true;
+    }
+    if (msg?.action === 'CLEAR_REMINDER' && msg.noteId) {
+      const alarmName = `memodock-reminder-${msg.noteId}`;
+      chrome.alarms?.clear(alarmName);
+      chrome.storage.local.remove(alarmName).catch(() => {});
+      sendResponse({ ok: true });
+    }
+  });
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
