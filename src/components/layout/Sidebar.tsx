@@ -178,6 +178,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   } | null>(null);
   // Folders are closed (collapsed) by default
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
+  const [expandedSubpageIds, setExpandedSubpageIds] = useState<Set<string>>(new Set());
+
+  const toggleSubpageCollapse = (noteId: string) => {
+    setExpandedSubpageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(noteId)) next.delete(noteId);
+      else next.add(noteId);
+      return next;
+    });
+  };
 
   // Auto-expand folder when active note is inside it
   useEffect(() => {
@@ -344,8 +354,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Minimalist Mode Sidebar (Unified Tree: Folders + Notes with bidirectional Drag & Drop reordering)
   if (isMinimalistMode || noteListMode === 'minimal') {
-    // Partition notes by folder
+    // Partition notes by folder & parentNoteId for nested sub-page tree
     const existingFolderIds = new Set(folders.map((f) => f.id));
+    const existingNoteIds = new Set(notes.map((n) => n.id));
+    const subpagesByParent: Record<string, Note[]> = {};
+    for (const n of notes) {
+      if (n.parentNoteId && n.parentNoteId !== n.id && existingNoteIds.has(n.parentNoteId)) {
+        if (!subpagesByParent[n.parentNoteId]) subpagesByParent[n.parentNoteId] = [];
+        subpagesByParent[n.parentNoteId].push(n);
+      }
+    }
+
     const notesByFolder: Record<string, Note[]> = {};
     for (const f of folders) {
       notesByFolder[f.id] = [];
@@ -353,6 +372,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const rootNotes: Note[] = [];
 
     for (const n of notes) {
+      // Skip notes that are nested under an existing parent note
+      if (n.parentNoteId && n.parentNoteId !== n.id && existingNoteIds.has(n.parentNoteId)) {
+        continue;
+      }
       if (n.folderId && existingFolderIds.has(n.folderId)) {
         notesByFolder[n.folderId].push(n);
       } else {
@@ -377,8 +400,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       await onCreateNote({ folderId });
     };
 
-    // Shared note item renderer for unified styling
-    const renderNoteItem = (note: Note, isInsideFolder = false) => {
+    // Shared note item renderer for unified styling (supports recursive sub-page nesting)
+    const renderNoteItem = (
+      note: Note,
+      isInsideFolder = false,
+      depth = 0,
+      visited: Set<string> = new Set()
+    ) => {
+      if (visited.has(note.id)) return null;
+      const nextVisited = new Set(visited);
+      nextVisited.add(note.id);
+      const childSubpages = subpagesByParent[note.id] || [];
+      const hasSubpages = childSubpages.length > 0;
+      const isSubpagesExpanded = expandedSubpageIds.has(note.id);
       const isActive = note.id === activeNoteId;
       const isDragOver = dragOverNoteId === note.id;
       const isMenuOpen = activeMenuNoteId === note.id;
@@ -488,6 +522,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }`}
         >
           <div className="flex items-center gap-1 truncate flex-1 relative">
+            {hasSubpages && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSubpageCollapse(note.id);
+                }}
+                className="p-0.5 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-400 flex-shrink-0"
+                title={isSubpagesExpanded ? 'Collapse sub-pages' : 'Expand sub-pages'}
+              >
+                {isSubpagesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              </button>
+            )}
             <GripVertical className="w-3 h-3 text-stone-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-grab active:cursor-grabbing mr-0.5" />
             <button
               type="button"
@@ -667,6 +714,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
           </div>
+
+          {hasSubpages && isSubpagesExpanded && (
+            <div className="ml-3 pl-1.5 border-l border-stone-200/70 dark:border-zinc-800/70 space-y-0.5">
+              {childSubpages.map((child) => renderNoteItem(child, isInsideFolder, depth + 1, nextVisited))}
+            </div>
+          )}
         </div>
       );
     };

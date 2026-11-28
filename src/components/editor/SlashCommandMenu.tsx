@@ -18,6 +18,8 @@ import {
   Quote,
   Minus,
   ListTree,
+  Columns,
+  FilePlus,
 } from 'lucide-react';
 
 interface SlashCommandMenuProps {
@@ -27,6 +29,7 @@ interface SlashCommandMenuProps {
   query: string;
   onClose: () => void;
   onCreateDatabase?: () => void;
+  onCreateSubPageInline?: () => void;
 }
 
 interface SlashItem {
@@ -45,6 +48,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   query,
   onClose,
   onCreateDatabase,
+  onCreateSubPageInline,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -216,6 +220,66 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       Icon: ListTree,
       action: () =>
         editor.chain().focus().insertContent('<div data-type="toc-block"></div>').run(),
+    },
+    {
+      id: 'toggle-h1',
+      label: 'Toggle Heading 1',
+      desc: 'Collapsible large heading section',
+      keywords: 'th1 toggle heading 1 collapse',
+      Icon: ChevronRight,
+      action: () =>
+        editor.chain().focus().insertContent('<div data-type="toggle-heading" data-level="1" data-title="" data-body="" data-open="true"></div>').run(),
+    },
+    {
+      id: 'toggle-h2',
+      label: 'Toggle Heading 2',
+      desc: 'Collapsible medium heading section',
+      keywords: 'th2 toggle heading 2 collapse',
+      Icon: ChevronRight,
+      action: () =>
+        editor.chain().focus().insertContent('<div data-type="toggle-heading" data-level="2" data-title="" data-body="" data-open="true"></div>').run(),
+    },
+    {
+      id: 'sub-page',
+      label: 'Sub-Page',
+      desc: 'Create and embed a nested child page',
+      keywords: 'page subpage child nested',
+      Icon: FilePlus,
+      action: () => {
+        if (onCreateSubPageInline) {
+          onCreateSubPageInline();
+        }
+      },
+    },
+    {
+      id: '2col',
+      label: '2 Columns',
+      desc: 'Side-by-side 2-column layout',
+      keywords: '2col columns layout grid',
+      Icon: Columns,
+      action: () =>
+        editor
+          .chain()
+          .focus()
+          .insertContent(
+            '<div data-type="column-layout" data-columns="2"><div data-type="column-item"><p>Column 1</p></div><div data-type="column-item"><p>Column 2</p></div></div>'
+          )
+          .run(),
+    },
+    {
+      id: '3col',
+      label: '3 Columns',
+      desc: 'Side-by-side 3-column layout',
+      keywords: '3col columns layout grid',
+      Icon: Columns,
+      action: () =>
+        editor
+          .chain()
+          .focus()
+          .insertContent(
+            '<div data-type="column-layout" data-columns="3"><div data-type="column-item"><p>Column 1</p></div><div data-type="column-item"><p>Column 2</p></div><div data-type="column-item"><p>Column 3</p></div></div>'
+          )
+          .run(),
     },
   ];
 

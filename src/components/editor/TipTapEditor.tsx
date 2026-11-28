@@ -25,8 +25,12 @@ import { CalloutBlock } from './extensions/CalloutBlock';
 import { ToggleBlock } from './extensions/ToggleBlock';
 import { DatabaseBlockNode } from './extensions/DatabaseBlock';
 import { TableOfContentsBlock } from './extensions/TableOfContentsBlock';
+import { ToggleHeading } from './extensions/ToggleHeading';
+import { SubPageBlock } from './extensions/SubPageBlock';
+import { ColumnLayout, ColumnItem } from './extensions/ColumnLayout';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { MentionMenu } from './MentionMenu';
+import { BlockHandleMenu } from './BlockHandleMenu';
 import { IconPicker } from '../common/IconPicker';
 import { EditorToolbar } from './EditorToolbar';
 import { FindReplaceBar } from './FindReplaceBar';
@@ -216,6 +220,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const [lastIngestion, setLastIngestion] = useState<IngestionResult | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Sync title when active note changes (keep empty if untitled so gray suggestion shows)
   useEffect(() => {
@@ -275,6 +280,10 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       ToggleBlock,
       DatabaseBlockNode,
       TableOfContentsBlock,
+      ToggleHeading,
+      SubPageBlock,
+      ColumnLayout,
+      ColumnItem,
     ],
     editable: !note.isLocked,
     content: note.content || '',
@@ -577,6 +586,18 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
       onUpdateNote({ lastViewedAt: Date.now() });
     }
   }, [note.id]);
+
+  // Listen for SubPageBlock click navigation
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const targetId = (e as CustomEvent<{ noteId: string }>).detail?.noteId;
+      if (targetId && onNavigateToNote) {
+        onNavigateToNote(targetId);
+      }
+    };
+    window.addEventListener('memodock-open-note', handler);
+    return () => window.removeEventListener('memodock-open-note', handler);
+  }, [onNavigateToNote]);
 
   // Periodic Version Snapshot creation (saves snapshot if content significantly changed)
   useEffect(() => {
@@ -1223,12 +1244,14 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
             {/* Rich Text Editor Content */}
             <div
-              className={`prose dark:prose-invert max-w-none ${fontSizeClasses} tiptap-content-container`}
+              ref={editorContainerRef}
+              className={`relative prose dark:prose-invert max-w-none ${fontSizeClasses} tiptap-content-container`}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenuPos({ x: e.clientX, y: e.clientY });
               }}
             >
+              {editor && <BlockHandleMenu editor={editor} containerRef={editorContainerRef} />}
               <EditorContent editor={editor} />
             </div>
 
@@ -1352,6 +1375,35 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           position={slashMenu.pos}
           query={slashMenu.query}
           onClose={() => setSlashMenu((prev) => ({ ...prev, open: false }))}
+          onCreateSubPageInline={async () => {
+            const subTitle = window.prompt('Sub-page title:', 'Untitled Sub-page');
+            if (subTitle === null) return;
+            const cleanTitle = subTitle.trim() || 'Untitled Sub-page';
+            const now = Date.now();
+            const subId = `note-${now}-${Math.random().toString(36).substring(2, 6)}`;
+            await db.notes.add({
+              id: subId,
+              title: cleanTitle,
+              content: '',
+              plainText: '',
+              createdAt: now,
+              updatedAt: now,
+              folderId: note.folderId || null,
+              parentNoteId: note.id,
+              tags: [],
+              isPinned: false,
+              isFavorite: false,
+              isArchived: false,
+              isTrash: false,
+            });
+            editor
+              .chain()
+              .focus()
+              .insertContent(
+                `<div data-type="sub-page-block" data-note-id="${subId}" data-title="${cleanTitle.replace(/"/g, '&quot;')}"></div>`
+              )
+              .run();
+          }}
           onCreateDatabase={async () => {
             const now = Date.now();
             const colId = `col-${now}`;

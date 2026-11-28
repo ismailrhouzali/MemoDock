@@ -312,6 +312,12 @@ assert(resolvedTemplate.includes('<h1>Weekly Sync</h1>'), 'Template resolves {{t
 assert(resolvedTemplate.includes('2026-11-28'), 'Template resolves {{date}} variable');
 assert(!resolvedTemplate.includes('{{time}}'), 'Template resolves {{time}} variable');
 
+// 18. Test Notion Parity M2: New Editor Extension Files & Sub-page Nesting
+assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/BlockHandleMenu.tsx')), 'BlockHandleMenu.tsx exists');
+assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/ToggleHeading.tsx')), 'ToggleHeading.tsx exists');
+assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/SubPageBlock.tsx')), 'SubPageBlock.tsx exists');
+assert(fs.existsSync(path.join(process.cwd(), 'src/components/editor/extensions/ColumnLayout.tsx')), 'ColumnLayout.tsx exists');
+
 console.log(`\n========================================`);
 console.log(`TOTAL TESTS: ${passedTests + failedTests} | PASSED: ${passedTests} | FAILED: ${failedTests}`);
 console.log(`========================================\n`);
